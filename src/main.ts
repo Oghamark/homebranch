@@ -1,4 +1,4 @@
-import { Logger } from '@nestjs/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { DomainExceptionFilter } from './infrastructure/filters/domain-exception.filter';
@@ -15,6 +15,7 @@ async function bootstrap() {
   });
 
   app.useGlobalFilters(new DomainExceptionFilter());
+  app.useGlobalPipes(new ValidationPipe({ stopAtFirstError: true }));
   app.use(cookieParser());
   app.enableCors();
 

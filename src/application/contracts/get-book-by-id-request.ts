@@ -1,7 +1,6 @@
-import { IsNotEmpty, IsUUID } from 'class-validator';
+import { IsUUID } from 'class-validator';
 
 export class GetBookByIdRequest {
-  @IsNotEmpty()
   @IsUUID()
   id: string;
 }

@@ -120,7 +120,7 @@ export class BookController {
       coverImage?: Express.Multer.File[];
     },
     @Body()
-    createBookRequest: Omit<CreateBookRequest, 'filePath' | 'coverImagePath'>,
+    createBookRequest: CreateBookRequest,
   ) {
     const request: CreateBookRequest = {
       ...createBookRequest,
