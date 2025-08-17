@@ -10,8 +10,5 @@ export interface IBookRepository extends IRepository<Book> {
     offset?: number,
   ): Promise<Result<PaginationResult<Book[]>>>;
   findFavorites(limit?: number, offset?: number): Promise<Result<Book[]>>;
-  findByTitle(
-    title: string,
-    limit?: number,
-  ): Promise<Result<Book>>;
+  findByTitle(title: string, limit?: number): Promise<Result<Book>>;
 }
