@@ -100,9 +100,11 @@ export class TypeOrmBookRepository implements IBookRepository {
     });
     return Result.success({
       data: BookMapper.toDomainList(bookEntities),
+      limit: limit,
+      offset: offset,
       total: total,
       nextCursor:
-        limit && offset && total > offset + limit ? offset + limit : null,
+        limit && total > (offset || 0) + (limit || 0) ? (offset || 0) + (limit || 0) : null,
     });
   }
 

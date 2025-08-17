@@ -13,6 +13,5 @@ export interface IBookRepository extends IRepository<Book> {
   findByTitle(
     title: string,
     limit?: number,
-    offset?: number,
   ): Promise<Result<Book>>;
 }

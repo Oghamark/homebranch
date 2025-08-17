@@ -44,7 +44,6 @@ export class BookController {
   @Get()
   @UseGuards(JwtAuthGuard)
   getBooks(@Query() paginationDto: PaginatedQuery) {
-    console.log(paginationDto);
     return this.getBooksUseCase.execute(paginationDto);
   }
 
