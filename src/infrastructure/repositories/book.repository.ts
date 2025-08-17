@@ -113,13 +113,22 @@ export class TypeOrmBookRepository implements IBookRepository {
   async findFavorites(
     limit?: number,
     offset?: number,
-  ): Promise<Result<Book[]>> {
-    const bookEntities = await this.repository.find({
+  ): Promise<Result<PaginationResult<Book[]>>> {
+    const [bookEntities, total] = await this.repository.findAndCount({
       where: { isFavorite: true },
       take: limit,
       skip: offset,
     });
-    return Result.success(BookMapper.toDomainList(bookEntities));
+    return Result.success({
+      data: BookMapper.toDomainList(bookEntities),
+      limit: limit,
+      offset: offset,
+      total: total,
+      nextCursor:
+        limit && total > (offset || 0) + (limit || 0)
+          ? (offset || 0) + (limit || 0)
+          : null,
+    });
   }
 
   async findByTitle(title: string): Promise<Result<Book>> {

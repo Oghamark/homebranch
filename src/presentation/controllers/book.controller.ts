@@ -49,8 +49,8 @@ export class BookController {
 
   @Get('favorite')
   @UseGuards(JwtAuthGuard)
-  getFavoriteBooks() {
-    return this.getFavoriteBooksUseCase.execute();
+  getFavoriteBooks(@Query() paginationDto: PaginatedQuery) {
+    return this.getFavoriteBooksUseCase.execute(paginationDto);
   }
 
   @Get(`:id`)
