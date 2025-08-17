@@ -3,7 +3,7 @@ import { UpdateBookRequest } from '../contracts/update-book-request';
 import { UseCase } from '../interfaces/usecase';
 import { IBookRepository } from '../interfaces/book-repository';
 import { Inject, Injectable } from '@nestjs/common';
-import { Result, Success } from '../interfaces/result';
+import { Result } from '../../core/result';
 
 @Injectable()
 export class UpdateBookUseCase implements UseCase<UpdateBookRequest, Book> {
@@ -13,11 +13,11 @@ export class UpdateBookUseCase implements UseCase<UpdateBookRequest, Book> {
 
   async execute(request: UpdateBookRequest): Promise<Result<Book>> {
     const findBookResult = await this.bookRepository.findById(request.id);
-    if (!findBookResult.isSuccess) {
+    if (!findBookResult.isSuccess()) {
       return findBookResult;
     }
 
-    const book = (findBookResult as Success<Book>).value;
+    const book = findBookResult.getValue();
 
     book.title = request.title ?? book.title;
     book.author = request.author ?? book.author;

@@ -4,7 +4,7 @@ import { Book } from 'src/domain/entities/book.entity';
 import { UseCase } from '../interfaces/usecase';
 import { GetBookByIdRequest } from '../contracts/get-book-by-id-request';
 import { PaginatedQuery } from '../contracts/paginated-query';
-import { Result } from '../interfaces/result';
+import { Result } from '../../core/result';
 
 @Injectable()
 export class GetBookByIdUseCase

@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { IBookRepository } from '../interfaces/book-repository';
 import { Book } from '../../domain/entities/book.entity';
-import { Result } from '../interfaces/result';
+import { Result } from '../../core/result';
 
 @Injectable()
 export class GetFavoriteBooksUseCase {

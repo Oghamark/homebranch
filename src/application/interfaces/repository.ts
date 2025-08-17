@@ -1,4 +1,4 @@
-import { Result } from './result';
+import { Result } from '../../core/result';
 
 export interface IRepository<T> {
   findAll(): Promise<Result<T[]>>;

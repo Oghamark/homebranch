@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { IBookRepository } from '../interfaces/book-repository';
 import { UseCase } from '../interfaces/usecase';
 import { Book } from 'src/domain/entities/book.entity';
-import { Result } from '../interfaces/result';
+import { Result } from '../../core/result';
 
 @Injectable()
 export class GetBooksUseCase implements UseCase<void, Book[]> {

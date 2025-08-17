@@ -3,7 +3,7 @@ import { IBookRepository } from '../interfaces/book-repository';
 import { UseCase } from '../interfaces/usecase';
 import { DeleteBookRequest } from '../contracts/delete-book-request';
 import { Book } from '../../domain/entities/book.entity';
-import { Result } from '../interfaces/result';
+import { Result } from '../../core/result';
 
 @Injectable()
 export class DeleteBookUseCase implements UseCase<DeleteBookRequest, Book> {

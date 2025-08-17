@@ -5,7 +5,7 @@ import { UseCase } from '../interfaces/usecase';
 import { BookFactory } from 'src/domain/entities/book.factory';
 import { Book } from 'src/domain/entities/book.entity';
 import { randomUUID } from 'crypto';
-import { Result } from '../interfaces/result';
+import { Result } from '../../core/result';
 
 @Injectable()
 export class CreateBookUseCase implements UseCase<CreateBookRequest, Book> {

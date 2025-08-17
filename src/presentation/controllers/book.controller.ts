@@ -25,8 +25,10 @@ import { join } from 'path';
 import { DeleteBookRequest } from 'src/application/contracts/delete-book-request';
 import { GetFavoriteBooksUseCase } from 'src/application/usecases/get-favorite-books-use-case.service';
 import { JwtAuthGuard } from '../../infrastructure/guards/jwt-auth.guard';
+import { MapResultInterceptor } from '../interceptors/map_result.interceptor';
 
 @Controller('books')
+@UseInterceptors(MapResultInterceptor)
 export class BookController {
   constructor(
     private readonly getBooksUseCase: GetBooksUseCase,
@@ -52,7 +54,7 @@ export class BookController {
   @Get(`:id`)
   @UseGuards(JwtAuthGuard)
   getBookById(@Param('id') id: string) {
-    return this.getBookByIdUseCase.execute(id);
+    return this.getBookByIdUseCase.execute({ id });
   }
 
   @Post()

@@ -1,7 +1,7 @@
-import { Failure } from '../../application/interfaces/result';
+import { Failure } from '../../core/result';
 
 export class BookNotFoundFailure extends Failure {
   constructor() {
-    super('Book not found');
+    super('BOOK_NOT_FOUND', 'Book not found');
   }
 }
