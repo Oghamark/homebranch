@@ -1,5 +1,5 @@
-import { Result } from '../../core/result';
-import { PaginationResult } from '../../core/pagination_result';
+import { Result } from './result';
+import { PaginationResult } from './pagination_result';
 
 export interface IRepository<T> {
   findAll(
