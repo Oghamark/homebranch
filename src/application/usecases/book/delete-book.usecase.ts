@@ -1,9 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { IBookRepository } from 'src/application/interfaces/book-repository';
-import { UseCase } from 'src/core/usecase';
-import { DeleteBookRequest } from 'src/application/contracts/delete-book-request';
+import { IBookRepository } from '../../interfaces/book-repository';
+import { DeleteBookRequest } from '../../contracts/book/delete-book-request';
 import { Book } from 'src/domain/entities/book.entity';
 import { Result } from 'src/core/result';
+import { UseCase } from 'src/core/usecase';
 
 @Injectable()
 export class DeleteBookUseCase implements UseCase<DeleteBookRequest, Book> {

@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { IBookRepository } from 'src/application/interfaces/book-repository';
 import { Repository } from 'typeorm';
 import { BookEntity } from 'src/infrastructure/database/book.entity';
-import { BookMapper } from 'src/infrastructure/mappers/book.mapper';
+import { BookMapper } from '../mappers/book.mapper';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Book } from 'src/domain/entities/book.entity';
 import { existsSync, unlinkSync } from 'fs';
@@ -10,6 +10,7 @@ import { join } from 'path';
 import { BookNotFoundFailure } from 'src/domain/failures/book.failures';
 import { Result } from 'src/core/result';
 import { PaginationResult } from 'src/core/pagination_result';
+import { BookShelf } from 'src/domain/entities/bookshelf.entity';
 
 @Injectable()
 export class TypeOrmBookRepository implements IBookRepository {
@@ -47,6 +48,27 @@ export class TypeOrmBookRepository implements IBookRepository {
       (await this.repository.findOne({ where: { id } })) || null;
     if (bookEntity) return Result.success(BookMapper.toDomain(bookEntity));
     return Result.failure(new BookNotFoundFailure());
+  }
+
+  async findByBookShelfId(
+    bookShelf: BookShelf,
+    limit?: number,
+    offset?: number,
+  ): Promise<Result<PaginationResult<Book[]>>> {
+    const [bookShelfEntities, total] = await this.repository.findAndCount({
+      where: { bookShelf: { id: bookShelf.id } },
+      take: limit,
+      skip: offset,
+    });
+
+    return Result.success({
+      data: BookMapper.toDomainList(bookShelfEntities),
+      limit: limit,
+      offset: offset,
+      total: total,
+      nextCursor:
+        limit && total > (offset ?? 0) + limit ? (offset ?? 0) + limit : null,
+    });
   }
 
   async update(id: string, book: Book): Promise<Result<Book>> {
@@ -134,7 +156,7 @@ export class TypeOrmBookRepository implements IBookRepository {
   async findByTitle(title: string): Promise<Result<Book>> {
     const bookEntity =
       (await this.repository.findOne({ where: { title } })) || null;
-    if (bookEntity) Result.success(BookMapper.toDomain(bookEntity));
+    if (bookEntity) return Result.success(BookMapper.toDomain(bookEntity));
     return Result.failure(new BookNotFoundFailure());
   }
 }

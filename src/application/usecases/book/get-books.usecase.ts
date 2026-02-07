@@ -1,13 +1,13 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { IBookRepository } from 'src/application/interfaces/book-repository';
+import { IBookRepository } from '../../interfaces/book-repository';
 import { Book } from 'src/domain/entities/book.entity';
 import { Result } from 'src/core/result';
+import { PaginationResult } from 'src/core/pagination_result';
 import { UseCase } from 'src/core/usecase';
 import { PaginatedQuery } from 'src/core/paginated-query';
-import { PaginationResult } from 'src/core/pagination_result';
 
 @Injectable()
-export class GetFavoriteBooksUseCase
+export class GetBooksUseCase
   implements UseCase<PaginatedQuery, PaginationResult<Book[]>>
 {
   constructor(
@@ -18,6 +18,6 @@ export class GetFavoriteBooksUseCase
     limit,
     offset,
   }: PaginatedQuery): Promise<Result<PaginationResult<Book[]>>> {
-    return await this.bookRepository.findFavorites(limit, offset);
+    return await this.bookRepository.findAll(limit, offset);
   }
 }

@@ -1,4 +1,11 @@
-import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  Entity,
+  JoinColumn,
+  ManyToOne,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
+import { BookShelfEntity } from 'src/infrastructure/database/book-shelf.entity';
 
 @Entity()
 export class BookEntity {
@@ -22,4 +29,10 @@ export class BookEntity {
 
   @Column({ name: 'cover_image_file_name', nullable: true })
   coverImageFileName?: string;
+
+  @ManyToOne(() => BookShelfEntity, (bookShelf) => bookShelf.books, {
+    onDelete: 'SET NULL',
+  })
+  @JoinColumn({ name: 'book_shelf_id' })
+  bookShelf?: BookShelfEntity;
 }
