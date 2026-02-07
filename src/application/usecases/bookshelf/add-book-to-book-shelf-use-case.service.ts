@@ -39,7 +39,7 @@ export class AddBookToBookShelfUseCase
     const findBookResult = await this.bookRepository.findById(request.bookId);
 
     if (!findBookResult.isSuccess()) {
-      return Result.failure(new BookNotFoundFailure());
+      return Result.failure(findBookResult.getFailure());
     }
 
     const book = findBookResult.getValue();
