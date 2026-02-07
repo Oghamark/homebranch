@@ -67,7 +67,7 @@ export class TypeOrmBookRepository implements IBookRepository {
       offset: offset,
       total: total,
       nextCursor:
-        offset && limit && total > offset + limit ? offset + limit : null,
+        limit && total > (offset ?? 0) + limit ? (offset ?? 0) + limit : null,
     });
   }
 

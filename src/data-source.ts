@@ -4,9 +4,6 @@ dotenv.config();
 import { DataSource } from 'typeorm';
 import { SnakeNamingStrategy } from 'typeorm-naming-strategies';
 
-console.log(process.env.DATABASE_HOST);
-console.log(process.env.DATABASE_PORT);
-
 export default new DataSource({
   type: 'postgres',
   host: process.env.DATABASE_HOST,

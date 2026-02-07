@@ -4,7 +4,6 @@ import { Book } from 'src/domain/entities/book.entity';
 import { PaginationResult } from 'src/core/pagination_result';
 import { IBookShelfRepository } from '../../interfaces/bookshelf-repository';
 import { Result } from 'src/core/result';
-import { BookShelfNotFoundFailure } from 'src/domain/failures/bookshelf.failures';
 import { GetBookShelfBooksRequest } from '../../contracts/bookshelf/get-book-shelf-books';
 import { IBookRepository } from '../../interfaces/book-repository';
 
@@ -23,11 +22,10 @@ export class GetBookShelfBooksUseCase
   async execute({
     id,
   }: GetBookShelfBooksRequest): Promise<Result<PaginationResult<Book[]>>> {
-    // Verify the bookshelf exists
     const findBookShelfResult = await this.bookShelfRepository.findById(id);
 
-    if (findBookShelfResult.isFailure() || !findBookShelfResult.getValue()) {
-      return Result.failure(new BookShelfNotFoundFailure());
+    if (!findBookShelfResult.isSuccess()) {
+      return Result.failure(findBookShelfResult.getFailure());
     }
 
     return await this.bookRepository.findByBookShelfId(

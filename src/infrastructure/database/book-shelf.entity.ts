@@ -9,6 +9,6 @@ export class BookShelfEntity {
   @Column()
   title: string;
 
-  @OneToMany(() => BookEntity, (book) => book.bookShelf)
+  @OneToMany(() => BookEntity, (book) => book.bookShelf, { cascade: true })
   books: BookEntity[];
 }

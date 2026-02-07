@@ -13,11 +13,17 @@ export class BookShelfMapper {
   }
 
   static toPersistence(bookShelf: BookShelf): BookShelfEntity {
-    return {
+    const entity: BookShelfEntity = {
       id: bookShelf.id,
       title: bookShelf.title,
-      books: bookShelf.books.map((book) => BookMapper.toPersistence(book)),
+      books: [],
     };
+    entity.books = bookShelf.books.map((book) => {
+      const bookEntity = BookMapper.toPersistence(book);
+      bookEntity.bookShelf = entity;
+      return bookEntity;
+    });
+    return entity;
   }
 
   static toDomainList(bookShelfEntityList: BookShelfEntity[]): BookShelf[] {

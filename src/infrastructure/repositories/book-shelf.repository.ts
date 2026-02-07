@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Result } from 'src/core/result';
 import { PaginationResult } from 'src/core/pagination_result';
 import { BookShelfEntity } from 'src/infrastructure/database/book-shelf.entity';
+import { BookEntity } from 'src/infrastructure/database/book.entity';
 import { IBookShelfRepository } from 'src/application/interfaces/bookshelf-repository';
 import { BookShelf } from 'src/domain/entities/bookshelf.entity';
 import { BookShelfMapper } from '../mappers/book-shelf.mapper';
@@ -14,6 +15,8 @@ export class TypeOrmBookShelfRepository implements IBookShelfRepository {
   constructor(
     @InjectRepository(BookShelfEntity)
     private repository: Repository<BookShelfEntity>,
+    @InjectRepository(BookEntity)
+    private bookRepository: Repository<BookEntity>,
   ) {}
 
   async create(entity: BookShelf): Promise<Result<BookShelf>> {
@@ -38,7 +41,7 @@ export class TypeOrmBookShelfRepository implements IBookShelfRepository {
       offset: offset,
       total: total,
       nextCursor:
-        offset && limit && total > offset + limit ? offset + limit : null,
+        limit && total > (offset ?? 0) + limit ? (offset ?? 0) + limit : null,
     });
   }
 
@@ -55,13 +58,35 @@ export class TypeOrmBookShelfRepository implements IBookShelfRepository {
   }
 
   async update(id: string, bookShelf: BookShelf): Promise<Result<BookShelf>> {
-    const exists = await this.repository.existsBy({ id: id });
+    const currentShelf = await this.repository.findOne({
+      where: { id },
+      relations: ['books'],
+    });
 
-    if (!exists) return Result.failure(new BookShelfNotFoundFailure());
+    if (!currentShelf) return Result.failure(new BookShelfNotFoundFailure());
+
+    // Nullify FK on books removed from the shelf
+    const newBookIds = new Set(bookShelf.books.map((b) => b.id));
+    const removedBookIds = (currentShelf.books ?? [])
+      .filter((b) => !newBookIds.has(b.id))
+      .map((b) => b.id);
+
+    if (removedBookIds.length > 0) {
+      await this.bookRepository
+        .createQueryBuilder()
+        .update(BookEntity)
+        .set({ bookShelf: () => 'NULL' })
+        .whereInIds(removedBookIds)
+        .execute();
+    }
 
     const bookShelfEntity = BookShelfMapper.toPersistence(bookShelf);
-    await this.repository.save(bookShelfEntity);
-    return Result.success(BookShelfMapper.toDomain(bookShelfEntity));
+    const savedEntity = await this.repository.save(bookShelfEntity);
+    const result = await this.repository.findOne({
+      where: { id: savedEntity.id },
+      relations: ['books'],
+    });
+    return Result.success(BookShelfMapper.toDomain(result!));
   }
 
   async delete(id: string): Promise<Result<BookShelf>> {

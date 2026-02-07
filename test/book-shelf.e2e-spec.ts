@@ -1,4 +1,4 @@
-/* eslint-disable */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import * as request from 'supertest';
@@ -50,13 +50,34 @@ describe('BookShelfController (e2e)', () => {
       providers: [
         { provide: 'TokenGateway', useValue: { verifyAccessToken: jest.fn() } },
         { provide: GetBookShelvesUseCase, useValue: mockGetBookShelvesUseCase },
-        { provide: GetBookShelfByIdUseCase, useValue: mockGetBookShelfByIdUseCase },
-        { provide: GetBookShelfBooksUseCase, useValue: mockGetBookShelfBooksUseCase },
-        { provide: CreateBookShelfUseCase, useValue: mockCreateBookShelfUseCase },
-        { provide: DeleteBookShelfUseCase, useValue: mockDeleteBookShelfUseCase },
-        { provide: UpdateBookShelfUseCase, useValue: mockUpdateBookShelfUseCase },
-        { provide: AddBookToBookShelfUseCase, useValue: mockAddBookToBookShelfUseCase },
-        { provide: RemoveBookFromBookShelfUseCase, useValue: mockRemoveBookFromBookShelfUseCase },
+        {
+          provide: GetBookShelfByIdUseCase,
+          useValue: mockGetBookShelfByIdUseCase,
+        },
+        {
+          provide: GetBookShelfBooksUseCase,
+          useValue: mockGetBookShelfBooksUseCase,
+        },
+        {
+          provide: CreateBookShelfUseCase,
+          useValue: mockCreateBookShelfUseCase,
+        },
+        {
+          provide: DeleteBookShelfUseCase,
+          useValue: mockDeleteBookShelfUseCase,
+        },
+        {
+          provide: UpdateBookShelfUseCase,
+          useValue: mockUpdateBookShelfUseCase,
+        },
+        {
+          provide: AddBookToBookShelfUseCase,
+          useValue: mockAddBookToBookShelfUseCase,
+        },
+        {
+          provide: RemoveBookFromBookShelfUseCase,
+          useValue: mockRemoveBookFromBookShelfUseCase,
+        },
       ],
     })
       .overrideGuard(JwtAuthGuard)
@@ -112,8 +133,9 @@ describe('BookShelfController (e2e)', () => {
         Result.failure(new BookShelfNotFoundFailure()),
       );
 
-      const response = await request(app.getHttpServer())
-        .get('/book-shelves/nonexistent');
+      const response = await request(app.getHttpServer()).get(
+        '/book-shelves/nonexistent',
+      );
 
       expect(response.body.success).toBe(false);
     });

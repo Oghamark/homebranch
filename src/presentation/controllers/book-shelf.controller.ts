@@ -71,7 +71,7 @@ export class BookShelfController {
 
   @Delete(`:id`)
   @UseGuards(JwtAuthGuard)
-  deleteBook(@Param('id') id: string) {
+  deleteBookShelf(@Param('id') id: string) {
     const deleteBookShelfRequest: DeleteBookShelfRequest = {
       id,
     };
@@ -80,7 +80,7 @@ export class BookShelfController {
 
   @Put(`:id`)
   @UseGuards(JwtAuthGuard)
-  updateBook(
+  updateBookShelf(
     @Param('id') id: string,
     @Body() updateBookShelfDto: UpdateBookShelfDto,
   ) {
