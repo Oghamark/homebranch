@@ -42,7 +42,7 @@ export class BookController {
     private readonly updateBookUseCase: UpdateBookUseCase,
   ) {}
 
-  logger = new Logger('BookController');
+  private readonly logger = new Logger('BookController');
   @Get()
   @UseGuards(JwtAuthGuard)
   getBooks(@Query() paginationDto: PaginatedQuery) {
