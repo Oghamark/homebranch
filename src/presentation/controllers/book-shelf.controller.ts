@@ -27,6 +27,7 @@ import { UpdateBookShelfDto } from '../dtos/update-book-shelf.dto';
 import { AddBookToBookShelfDto } from '../dtos/add-book-to-book-shelf.dto';
 import { RemoveBookFromBookShelfDto } from '../dtos/remove-book-from-book-shelf.dto';
 import { GetBookShelfBooksUseCase } from 'src/application/usecases/bookshelf/get-book-shelf-books-use-case.service';
+import { GetBookShelvesByBookUseCase } from 'src/application/usecases/bookshelf/get-book-shelves-by-book-use-case.service';
 
 @Controller('book-shelves')
 @UseInterceptors(MapResultInterceptor)
@@ -35,6 +36,7 @@ export class BookShelfController {
     private readonly getBookShelvesUseCase: GetBookShelvesUseCase,
     private readonly getBookShelfByIdUseCase: GetBookShelfByIdUseCase,
     private readonly getBookShelfBooksUseCase: GetBookShelfBooksUseCase,
+    private readonly getBookShelvesByBookUseCase: GetBookShelvesByBookUseCase,
     private readonly createBookShelfUseCase: CreateBookShelfUseCase,
     private readonly deleteBookShelfUseCase: DeleteBookShelfUseCase,
     private readonly updateBookShelfUseCase: UpdateBookShelfUseCase,
@@ -46,6 +48,12 @@ export class BookShelfController {
   @UseGuards(JwtAuthGuard)
   getBookShelves(@Query() paginationDto: PaginatedQuery) {
     return this.getBookShelvesUseCase.execute(paginationDto);
+  }
+
+  @Get('by-book/:bookId')
+  @UseGuards(JwtAuthGuard)
+  getBookShelvesByBook(@Param('bookId') bookId: string) {
+    return this.getBookShelvesByBookUseCase.execute({ bookId });
   }
 
   @Get(`:id/books`)

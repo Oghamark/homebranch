@@ -41,13 +41,11 @@ export class AddBookToBookShelfUseCase
       return Result.failure(findBookResult.getFailure());
     }
 
-    const book = findBookResult.getValue();
-
-    bookShelf.books.push(book);
-
-    return await this.bookShelfRepository.update(
+    await this.bookShelfRepository.addBook(
       request.bookShelfId,
-      bookShelf,
+      request.bookId,
     );
+
+    return await this.bookShelfRepository.findById(request.bookShelfId);
   }
 }

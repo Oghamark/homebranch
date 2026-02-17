@@ -60,30 +60,15 @@ export class TypeOrmBookShelfRepository implements IBookShelfRepository {
   async update(id: string, bookShelf: BookShelf): Promise<Result<BookShelf>> {
     const currentShelf = await this.repository.findOne({
       where: { id },
-      relations: ['books'],
     });
 
     if (!currentShelf) return Result.failure(new BookShelfNotFoundFailure());
 
-    // Nullify FK on books removed from the shelf
-    const newBookIds = new Set(bookShelf.books.map((b) => b.id));
-    const removedBookIds = (currentShelf.books ?? [])
-      .filter((b) => !newBookIds.has(b.id))
-      .map((b) => b.id);
+    currentShelf.title = bookShelf.title;
+    await this.repository.save(currentShelf);
 
-    if (removedBookIds.length > 0) {
-      await this.bookRepository
-        .createQueryBuilder()
-        .update(BookEntity)
-        .set({ bookShelf: () => 'NULL' })
-        .whereInIds(removedBookIds)
-        .execute();
-    }
-
-    const bookShelfEntity = BookShelfMapper.toPersistence(bookShelf);
-    const savedEntity = await this.repository.save(bookShelfEntity);
     const result = await this.repository.findOne({
-      where: { id: savedEntity.id },
+      where: { id },
       relations: ['books'],
     });
     return Result.success(BookShelfMapper.toDomain(result!));
@@ -107,5 +92,37 @@ export class TypeOrmBookShelfRepository implements IBookShelfRepository {
       return Result.success(BookShelfMapper.toDomain(bookShelfEntity));
     }
     return Result.failure(new BookShelfNotFoundFailure());
+  }
+
+  async addBook(bookShelfId: string, bookId: string): Promise<Result<void>> {
+    await this.repository
+      .createQueryBuilder()
+      .relation(BookShelfEntity, 'books')
+      .of(bookShelfId)
+      .add(bookId);
+    return Result.success(undefined);
+  }
+
+  async removeBook(
+    bookShelfId: string,
+    bookId: string,
+  ): Promise<Result<void>> {
+    await this.repository
+      .createQueryBuilder()
+      .relation(BookShelfEntity, 'books')
+      .of(bookShelfId)
+      .remove(bookId);
+    return Result.success(undefined);
+  }
+
+  async findByBookId(bookId: string): Promise<Result<BookShelf[]>> {
+    const shelves = await this.repository
+      .createQueryBuilder('shelf')
+      .innerJoin('shelf.books', 'book', 'book.id = :bookId', { bookId })
+      .getMany();
+
+    return Result.success(
+      shelves.map((shelf) => BookShelfMapper.toDomain(shelf)),
+    );
   }
 }

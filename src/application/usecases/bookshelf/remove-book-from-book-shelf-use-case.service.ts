@@ -31,13 +31,11 @@ export class RemoveBookFromBookShelfUseCase
       return Result.success(bookShelf);
     }
 
-    bookShelf.books = bookShelf.books.filter(
-      (book) => book.id !== request.bookId,
+    await this.bookShelfRepository.removeBook(
+      request.bookShelfId,
+      request.bookId,
     );
 
-    return await this.bookShelfRepository.update(
-      request.bookShelfId,
-      bookShelf,
-    );
+    return await this.bookShelfRepository.findById(request.bookShelfId);
   }
 }

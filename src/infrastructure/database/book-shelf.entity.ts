@@ -1,4 +1,10 @@
-import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  Entity,
+  JoinTable,
+  ManyToMany,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
 import { BookEntity } from 'src/infrastructure/database/book.entity';
 
 @Entity()
@@ -9,6 +15,11 @@ export class BookShelfEntity {
   @Column()
   title: string;
 
-  @OneToMany(() => BookEntity, (book) => book.bookShelf, { cascade: true })
+  @ManyToMany(() => BookEntity, (book) => book.bookShelves)
+  @JoinTable({
+    name: 'book_shelf_books',
+    joinColumn: { name: 'book_shelf_id', referencedColumnName: 'id' },
+    inverseJoinColumn: { name: 'book_id', referencedColumnName: 'id' },
+  })
   books: BookEntity[];
 }

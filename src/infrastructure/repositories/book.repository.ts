@@ -55,14 +55,17 @@ export class TypeOrmBookRepository implements IBookRepository {
     limit?: number,
     offset?: number,
   ): Promise<Result<PaginationResult<Book[]>>> {
-    const [bookShelfEntities, total] = await this.repository.findAndCount({
-      where: { bookShelf: { id: bookShelf.id } },
-      take: limit,
-      skip: offset,
-    });
+    const [bookEntities, total] = await this.repository
+      .createQueryBuilder('book')
+      .innerJoin('book.bookShelves', 'shelf', 'shelf.id = :shelfId', {
+        shelfId: bookShelf.id,
+      })
+      .take(limit)
+      .skip(offset)
+      .getManyAndCount();
 
     return Result.success({
-      data: BookMapper.toDomainList(bookShelfEntities),
+      data: BookMapper.toDomainList(bookEntities),
       limit: limit,
       offset: offset,
       total: total,

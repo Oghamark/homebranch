@@ -15,6 +15,7 @@ import { BookShelfController } from '../presentation/controllers/book-shelf.cont
 import { BooksModule } from './book.module';
 import { DeleteBookShelfUseCase } from '../application/usecases/bookshelf/delete-book-shelf-use-case.service';
 import { GetBookShelfBooksUseCase } from '../application/usecases/bookshelf/get-book-shelf-books-use-case.service';
+import { GetBookShelvesByBookUseCase } from '../application/usecases/bookshelf/get-book-shelves-by-book-use-case.service';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { GetBookShelfBooksUseCase } from '../application/usecases/bookshelf/get-
     GetBookShelvesUseCase,
     GetBookShelfByIdUseCase,
     GetBookShelfBooksUseCase,
+    GetBookShelvesByBookUseCase,
     UpdateBookShelfUseCase,
     AddBookToBookShelfUseCase,
     RemoveBookFromBookShelfUseCase,
