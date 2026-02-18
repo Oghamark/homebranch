@@ -68,6 +68,10 @@ export class TypeOrmUserRepository implements IUserRepository {
     return Result.success(UserMapper.toDomain(result!));
   }
 
+  async count(): Promise<number> {
+    return await this.repository.count();
+  }
+
   async countByRoleId(roleId: string): Promise<number> {
     return await this.repository.count({
       where: { role: { id: roleId } },

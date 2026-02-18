@@ -6,6 +6,9 @@ import { SnakeNamingStrategy } from 'typeorm-naming-strategies';
 import { BookShelfEntity } from '../infrastructure/database/book-shelf.entity';
 import { UserEntity } from '../infrastructure/database/user.entity';
 import { RoleEntity } from '../infrastructure/database/role.entity';
+import { SchemaUpdate1755566512418 } from '../migrations/1755566512418-schema-update';
+import { AddUserAndRoleTables1739836800000 } from '../migrations/1739836800000-AddUserAndRoleTables';
+import { SeedAdminRole1739836800001 } from '../migrations/1739836800001-SeedAdminRole';
 
 @Module({
   imports: [
@@ -43,7 +46,14 @@ import { RoleEntity } from '../infrastructure/database/role.entity';
           password: password,
           database: database,
           entities: [BookEntity, BookShelfEntity, UserEntity, RoleEntity],
-          synchronize: !isProduction,
+          migrations: [
+            SchemaUpdate1755566512418,
+            AddUserAndRoleTables1739836800000,
+            SeedAdminRole1739836800001,
+          ],
+          migrationsRun: true,
+          migrationsTableName: 'migration_table',
+          synchronize: false,
           logging: !isProduction,
           namingStrategy: new SnakeNamingStrategy(),
         };
