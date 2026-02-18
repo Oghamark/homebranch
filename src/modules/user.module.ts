@@ -48,6 +48,6 @@ import { RoleController } from 'src/presentation/controllers/role.controller';
     UserMapper,
   ],
   controllers: [UserController, RoleController],
-  exports: ['UserRepository'],
+  exports: ['UserRepository', RolesModule],
 })
 export class UsersModule {}

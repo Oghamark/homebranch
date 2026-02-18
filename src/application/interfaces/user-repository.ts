@@ -10,5 +10,6 @@ export interface IUserRepository {
   findById(id: string): Promise<Result<User>>;
   create(entity: User): Promise<Result<User>>;
   update(id: string, entity: User): Promise<Result<User>>;
+  count(): Promise<number>;
   countByRoleId(roleId: string): Promise<number>;
 }

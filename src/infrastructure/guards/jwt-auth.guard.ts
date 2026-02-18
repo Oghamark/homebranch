@@ -1,8 +1,9 @@
 import {
-  Injectable,
   CanActivate,
-  Inject,
   ExecutionContext,
+  Inject,
+  Injectable,
+  Logger,
 } from '@nestjs/common';
 import {
   InvalidTokenError,
@@ -12,6 +13,7 @@ import { ForbiddenError } from 'src/domain/exceptions/forbidden.exception';
 import { Request } from 'express';
 import { ITokenGateway } from 'src/application/interfaces/jwt-token.gateway';
 import { IUserRepository } from 'src/application/interfaces/user-repository';
+import { IRoleRepository } from 'src/application/interfaces/role-repository';
 import { UserFactory } from 'src/domain/entities/user.factory';
 import { User } from 'src/domain/entities/user.entity';
 
@@ -22,7 +24,11 @@ export class JwtAuthGuard implements CanActivate {
     private readonly tokenGateway: ITokenGateway,
     @Inject('UserRepository')
     private readonly userRepository: IUserRepository,
+    @Inject('RoleRepository')
+    private readonly roleRepository: IRoleRepository,
   ) {}
+
+  private logger = new Logger('JwtAuthGuard');
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request: Request = context.switchToHttp().getRequest();
@@ -43,6 +49,7 @@ export class JwtAuthGuard implements CanActivate {
       if (findResult.isSuccess()) {
         user = findResult.getValue();
       } else {
+        this.logger.log('Saving new user');
         // Auto-create user on first authentication
         const newUser = UserFactory.create(
           payload.userId,
@@ -52,6 +59,21 @@ export class JwtAuthGuard implements CanActivate {
         );
         const createResult = await this.userRepository.create(newUser);
         user = createResult.getValue();
+
+        // Auto-assign admin role to the first user
+        const userCount = await this.userRepository.count();
+        if (userCount === 1) {
+          this.logger.log('Assigning admin role to new user');
+          const adminRoleResult = await this.roleRepository.findByName('admin');
+          if (adminRoleResult.isSuccess()) {
+            user.role = adminRoleResult.getValue();
+            const updateResult = await this.userRepository.update(
+              user.id,
+              user,
+            );
+            user = updateResult.getValue();
+          }
+        }
       }
 
       // Check restriction status
