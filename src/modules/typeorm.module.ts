@@ -47,7 +47,13 @@ import { AddSavedPositionsTable1755566512419 } from '../migrations/1755566512419
           username: username,
           password: password,
           database: database,
-          entities: [BookEntity, BookShelfEntity, UserEntity, RoleEntity, SavedPositionEntity],
+          entities: [
+            BookEntity,
+            BookShelfEntity,
+            UserEntity,
+            RoleEntity,
+            SavedPositionEntity,
+          ],
           migrations: [
             SchemaUpdate1755566512418,
             AddUserAndRoleTables1739836800000,

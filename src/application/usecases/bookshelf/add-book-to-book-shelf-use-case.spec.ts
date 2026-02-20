@@ -17,12 +17,29 @@ describe('AddBookToBookShelfUseCase', () => {
 
   beforeEach(async () => {
     const mockBookShelfRepository = {
+      findByTitle: jest.fn(),
+      addBook: jest.fn(),
+      removeBook: jest.fn(),
+      findByBookId: jest.fn(),
+      findAll: jest.fn(),
       findById: jest.fn(),
+      create: jest.fn(),
       update: jest.fn(),
+      delete: jest.fn(),
     };
 
     const mockBookRepository = {
+      findByAuthor: jest.fn(),
+      findFavorites: jest.fn(),
+      findByTitle: jest.fn(),
+      findByBookShelfId: jest.fn(),
+      searchByTitle: jest.fn(),
+      searchFavoritesByTitle: jest.fn(),
+      findAll: jest.fn(),
       findById: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+      delete: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -90,11 +107,9 @@ describe('AddBookToBookShelfUseCase', () => {
         'bookshelf-123',
       );
       expect(bookRepository.findById).toHaveBeenCalledWith('book-456');
-      expect(bookShelfRepository.update).toHaveBeenCalledWith(
+      expect(bookShelfRepository.addBook).toHaveBeenCalledWith(
         'bookshelf-123',
-        expect.objectContaining({
-          books: expect.arrayContaining([mockBook]),
-        }),
+        'book-456',
       );
     });
 
@@ -111,7 +126,7 @@ describe('AddBookToBookShelfUseCase', () => {
         'bookshelf-123',
       );
       expect(bookRepository.findById).not.toHaveBeenCalled();
-      expect(bookShelfRepository.update).not.toHaveBeenCalled();
+      expect(bookShelfRepository.addBook).not.toHaveBeenCalled();
     });
 
     it('should return BookNotFoundFailure when book is not found', async () => {
@@ -133,7 +148,7 @@ describe('AddBookToBookShelfUseCase', () => {
         'bookshelf-123',
       );
       expect(bookRepository.findById).toHaveBeenCalledWith('book-456');
-      expect(bookShelfRepository.update).not.toHaveBeenCalled();
+      expect(bookShelfRepository.addBook).not.toHaveBeenCalled();
     });
 
     it('should return success immediately when book is already in bookshelf', async () => {
@@ -151,7 +166,7 @@ describe('AddBookToBookShelfUseCase', () => {
         'bookshelf-123',
       );
       expect(bookRepository.findById).not.toHaveBeenCalled();
-      expect(bookShelfRepository.update).not.toHaveBeenCalled();
+      expect(bookShelfRepository.addBook).not.toHaveBeenCalled();
     });
   });
 });

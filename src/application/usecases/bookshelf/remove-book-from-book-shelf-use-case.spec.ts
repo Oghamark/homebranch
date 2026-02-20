@@ -14,8 +14,15 @@ describe('RemoveBookFromBookShelfUseCase', () => {
 
   beforeEach(async () => {
     const mockBookShelfRepository = {
+      findByTitle: jest.fn(),
+      addBook: jest.fn(),
+      removeBook: jest.fn(),
+      findByBookId: jest.fn(),
+      findAll: jest.fn(),
       findById: jest.fn(),
+      create: jest.fn(),
       update: jest.fn(),
+      delete: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -64,23 +71,15 @@ describe('RemoveBookFromBookShelfUseCase', () => {
         Result.success(mockBookShelf),
       );
 
-      // Mock successful update
-      const updatedBookShelf = { ...mockBookShelf, books: [] };
-      bookShelfRepository.update.mockResolvedValue(
-        Result.success(updatedBookShelf),
-      );
-
       const result = await useCase.execute(mockRequest);
 
       expect(result.isSuccess()).toBe(true);
       expect(bookShelfRepository.findById).toHaveBeenCalledWith(
         'bookshelf-123',
       );
-      expect(bookShelfRepository.update).toHaveBeenCalledWith(
+      expect(bookShelfRepository.removeBook).toHaveBeenCalledWith(
         'bookshelf-123',
-        expect.objectContaining({
-          books: [],
-        }),
+        'book-456',
       );
     });
 
@@ -96,7 +95,7 @@ describe('RemoveBookFromBookShelfUseCase', () => {
       expect(bookShelfRepository.findById).toHaveBeenCalledWith(
         'bookshelf-123',
       );
-      expect(bookShelfRepository.update).not.toHaveBeenCalled();
+      expect(bookShelfRepository.removeBook).not.toHaveBeenCalled();
     });
 
     it('should return success immediately when book is not in bookshelf', async () => {
@@ -113,7 +112,7 @@ describe('RemoveBookFromBookShelfUseCase', () => {
       expect(bookShelfRepository.findById).toHaveBeenCalledWith(
         'bookshelf-123',
       );
-      expect(bookShelfRepository.update).not.toHaveBeenCalled();
+      expect(bookShelfRepository.removeBook).not.toHaveBeenCalled();
     });
   });
 });
