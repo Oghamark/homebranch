@@ -1,27 +1,25 @@
-/* eslint-disable */
 import { Test, TestingModule } from '@nestjs/testing';
 import { IUserRepository } from 'src/application/interfaces/user-repository';
-import { Result } from 'src/core/result';
-import { User } from 'src/domain/entities/user.entity';
 import { RestrictUserUseCase } from 'src/application/usecases/user/restrict-user.usecase';
+import { mock } from 'jest-mock-extended';
+import { mockUser } from 'test/mocks/userMocks';
+import { Result, UnexpectedFailure } from 'src/core/result';
 import { UserNotFoundFailure } from 'src/domain/failures/user.failures';
+import Mocked = jest.Mocked;
 
 describe('RestrictUserUseCase', () => {
   let useCase: RestrictUserUseCase;
-  let userRepository: jest.Mocked<IUserRepository>;
+  let userRepository: Mocked<IUserRepository>;
+
+  const userNotFoundFailure = new UserNotFoundFailure();
 
   beforeEach(async () => {
-    const mockUserRepository = {
-      findById: jest.fn(),
-      update: jest.fn(),
-    };
-
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         RestrictUserUseCase,
         {
           provide: 'UserRepository',
-          useValue: mockUserRepository,
+          useValue: mock<IUserRepository>(),
         },
       ],
     }).compile();
@@ -34,38 +32,42 @@ describe('RestrictUserUseCase', () => {
     jest.clearAllMocks();
   });
 
-  describe('execute', () => {
-    it('should restrict a user', async () => {
-      const mockUser = new User('user-1', 'alice', 'alice@example.com', false);
-      const restrictedUser = new User(
-        'user-1',
-        'alice',
-        'alice@example.com',
-        true,
-      );
+  test('Successfully restricts a user', async () => {
+    const restrictedUser = { ...mockUser, isRestricted: true };
+    userRepository.findById.mockResolvedValueOnce(Result.ok(mockUser));
+    userRepository.update.mockResolvedValueOnce(Result.ok(restrictedUser));
 
-      userRepository.findById.mockResolvedValue(Result.success(mockUser));
-      userRepository.update.mockResolvedValue(Result.success(restrictedUser));
+    const result = await useCase.execute({ id: mockUser.id });
 
-      const result = await useCase.execute({ id: 'user-1' });
+    expect(userRepository.findById).toHaveBeenCalledTimes(1);
+    expect(userRepository.findById).toHaveBeenCalledWith(mockUser.id);
+    expect(userRepository.update).toHaveBeenCalledTimes(1);
+    expect(result.isSuccess()).toBe(true);
+    expect(result.value!.isRestricted).toBe(true);
+  });
 
-      expect(result.isSuccess()).toBe(true);
-      expect(result.getValue().isRestricted).toBe(true);
-      expect(userRepository.update).toHaveBeenCalledWith(
-        'user-1',
-        expect.objectContaining({ isRestricted: true }),
-      );
-    });
+  test('Fails when user not found', async () => {
+    userRepository.findById.mockResolvedValueOnce(Result.fail(userNotFoundFailure));
 
-    it('should return failure when user is not found', async () => {
-      userRepository.findById.mockResolvedValue(
-        Result.failure(new UserNotFoundFailure()),
-      );
+    const result = await useCase.execute({ id: 'non-existent-id' });
 
-      const result = await useCase.execute({ id: 'nonexistent' });
+    expect(userRepository.findById).toHaveBeenCalledTimes(1);
+    expect(userRepository.findById).toHaveBeenCalledWith('non-existent-id');
+    expect(userRepository.update).not.toHaveBeenCalled();
+    expect(result.isFailure()).toBe(true);
+    expect(result.failure).toEqual(userNotFoundFailure);
+  });
 
-      expect(result.isFailure()).toBe(true);
-      expect(result.getFailure()).toBeInstanceOf(UserNotFoundFailure);
-    });
+  test('Fails when update operation fails', async () => {
+    const unexpectedFailure = new UnexpectedFailure('Unexpected error');
+    userRepository.findById.mockResolvedValueOnce(Result.ok(mockUser));
+    userRepository.update.mockResolvedValueOnce(Result.fail(unexpectedFailure));
+
+    const result = await useCase.execute({ id: mockUser.id });
+
+    expect(userRepository.findById).toHaveBeenCalledTimes(1);
+    expect(userRepository.update).toHaveBeenCalledTimes(1);
+    expect(result.isFailure()).toBe(true);
+    expect(result.failure).toEqual(unexpectedFailure);
   });
 });

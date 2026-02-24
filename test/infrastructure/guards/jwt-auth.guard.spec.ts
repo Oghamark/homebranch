@@ -96,7 +96,7 @@ describe('JwtAuthGuard', () => {
       adminRole,
     );
     tokenGateway.verifyAccessToken.mockResolvedValue(mockPayload);
-    userRepository.findById.mockResolvedValue(Result.success(existingUser));
+    userRepository.findById.mockResolvedValue(Result.ok(existingUser));
 
     const context = createMockContext('valid-token');
     const result = await guard.canActivate(context);
@@ -126,12 +126,12 @@ describe('JwtAuthGuard', () => {
 
     tokenGateway.verifyAccessToken.mockResolvedValue(mockPayload);
     userRepository.findById.mockResolvedValue(
-      Result.failure(new UserNotFoundFailure()),
+      Result.fail(new UserNotFoundFailure()),
     );
-    userRepository.create.mockResolvedValue(Result.success(newUser));
+    userRepository.create.mockResolvedValue(Result.ok(newUser));
     userRepository.count.mockResolvedValue(1);
-    roleRepository.findByName.mockResolvedValue(Result.success(adminRole));
-    userRepository.update.mockResolvedValue(Result.success(userWithRole));
+    roleRepository.findByName.mockResolvedValue(Result.ok(adminRole));
+    userRepository.update.mockResolvedValue(Result.ok(userWithRole));
 
     const context = createMockContext('valid-token');
     const result = await guard.canActivate(context);
@@ -166,9 +166,9 @@ describe('JwtAuthGuard', () => {
       ),
     );
     userRepository.findById.mockResolvedValue(
-      Result.failure(new UserNotFoundFailure()),
+      Result.fail(new UserNotFoundFailure()),
     );
-    userRepository.create.mockResolvedValue(Result.success(newUser));
+    userRepository.create.mockResolvedValue(Result.ok(newUser));
     userRepository.count.mockResolvedValue(2);
 
     const context = createMockContext('valid-token');
@@ -191,7 +191,7 @@ describe('JwtAuthGuard', () => {
       true,
     );
     tokenGateway.verifyAccessToken.mockResolvedValue(mockPayload);
-    userRepository.findById.mockResolvedValue(Result.success(restrictedUser));
+    userRepository.findById.mockResolvedValue(Result.ok(restrictedUser));
 
     const context = createMockContext('valid-token');
     await expect(guard.canActivate(context)).rejects.toThrow(ForbiddenError);

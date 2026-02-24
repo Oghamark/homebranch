@@ -1,26 +1,25 @@
-/* eslint-disable */
 import { Test, TestingModule } from '@nestjs/testing';
 import { IBookShelfRepository } from 'src/application/interfaces/bookshelf-repository';
-import { Result } from 'src/core/result';
-import { BookShelf } from 'src/domain/entities/bookshelf.entity';
 import { DeleteBookShelfUseCase } from 'src/application/usecases/bookshelf/delete-book-shelf-use-case.service';
+import { mock } from 'jest-mock-extended';
+import { mockBookShelf } from 'test/mocks/bookShelfMocks';
+import { Result } from 'src/core/result';
 import { BookShelfNotFoundFailure } from 'src/domain/failures/bookshelf.failures';
+import Mocked = jest.Mocked;
 
 describe('DeleteBookShelfUseCase', () => {
   let useCase: DeleteBookShelfUseCase;
-  let bookShelfRepository: jest.Mocked<IBookShelfRepository>;
+  let bookShelfRepository: Mocked<IBookShelfRepository>;
+
+  const bookshelfNotFoundFailure = new BookShelfNotFoundFailure();
 
   beforeEach(async () => {
-    const mockBookShelfRepository = {
-      delete: jest.fn(),
-    };
-
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         DeleteBookShelfUseCase,
         {
           provide: 'BookShelfRepository',
-          useValue: mockBookShelfRepository,
+          useValue: mock<IBookShelfRepository>(),
         },
       ],
     }).compile();
@@ -33,35 +32,29 @@ describe('DeleteBookShelfUseCase', () => {
     jest.clearAllMocks();
   });
 
-  describe('execute', () => {
-    const mockBookShelf: BookShelf = {
-      id: 'bookshelf-123',
-      title: 'My Bookshelf',
-      books: [],
-    };
+  test('Successfully deletes a bookshelf', async () => {
+    bookShelfRepository.delete.mockResolvedValueOnce(Result.ok(mockBookShelf));
+    bookShelfRepository.findById.mockResolvedValueOnce(Result.ok(mockBookShelf));
 
-    it('should successfully delete a bookshelf', async () => {
-      bookShelfRepository.delete.mockResolvedValue(
-        Result.success(mockBookShelf),
-      );
+    const result = await useCase.execute({ id: mockBookShelf.id });
 
-      const result = await useCase.execute({ id: 'bookshelf-123' });
+    expect(bookShelfRepository.delete).toHaveBeenCalledTimes(1);
+    expect(bookShelfRepository.delete).toHaveBeenCalledWith(mockBookShelf.id);
+    expect(bookShelfRepository.findById).toHaveBeenCalledTimes(1);
+    expect(bookShelfRepository.findById).toHaveBeenCalledWith(mockBookShelf.id);
+    expect(result.isSuccess()).toBe(true);
+    expect(result.value).toEqual(mockBookShelf);
+  });
 
-      expect(result.isSuccess()).toBe(true);
-      expect(result.getValue()).toEqual(mockBookShelf);
-      expect(bookShelfRepository.delete).toHaveBeenCalledWith('bookshelf-123');
-    });
+  test('Fails when bookshelf not found', async () => {
+    bookShelfRepository.findById.mockResolvedValueOnce(Result.fail(bookshelfNotFoundFailure));
 
-    it('should return failure when bookshelf is not found', async () => {
-      bookShelfRepository.delete.mockResolvedValue(
-        Result.failure(new BookShelfNotFoundFailure()),
-      );
+    const result = await useCase.execute({ id: 'non-existent-id' });
 
-      const result = await useCase.execute({ id: 'nonexistent-id' });
-
-      expect(result.isSuccess()).toBe(false);
-      expect(result.getFailure()).toBeInstanceOf(BookShelfNotFoundFailure);
-      expect(bookShelfRepository.delete).toHaveBeenCalledWith('nonexistent-id');
-    });
+    expect(bookShelfRepository.findById).toHaveBeenCalledTimes(1);
+    expect(bookShelfRepository.findById).toHaveBeenCalledWith('non-existent-id');
+    expect(bookShelfRepository.delete).not.toHaveBeenCalled();
+    expect(result.isFailure()).toBe(true);
+    expect(result.failure).toEqual(bookshelfNotFoundFailure);
   });
 });

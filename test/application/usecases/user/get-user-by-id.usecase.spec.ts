@@ -1,26 +1,25 @@
-/* eslint-disable */
 import { Test, TestingModule } from '@nestjs/testing';
 import { IUserRepository } from 'src/application/interfaces/user-repository';
-import { Result } from 'src/core/result';
-import { User } from 'src/domain/entities/user.entity';
 import { GetUserByIdUseCase } from 'src/application/usecases/user/get-user-by-id.usecase';
+import { mock } from 'jest-mock-extended';
+import { mockUser } from 'test/mocks/userMocks';
+import { Result } from 'src/core/result';
 import { UserNotFoundFailure } from 'src/domain/failures/user.failures';
+import Mocked = jest.Mocked;
 
 describe('GetUserByIdUseCase', () => {
   let useCase: GetUserByIdUseCase;
-  let userRepository: jest.Mocked<IUserRepository>;
+  let userRepository: Mocked<IUserRepository>;
+
+  const userNotFoundFailure = new UserNotFoundFailure();
 
   beforeEach(async () => {
-    const mockUserRepository = {
-      findById: jest.fn(),
-    };
-
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         GetUserByIdUseCase,
         {
           provide: 'UserRepository',
-          useValue: mockUserRepository,
+          useValue: mock<IUserRepository>(),
         },
       ],
     }).compile();
@@ -33,28 +32,25 @@ describe('GetUserByIdUseCase', () => {
     jest.clearAllMocks();
   });
 
-  describe('execute', () => {
-    it('should return a user when found', async () => {
-      const mockUser = new User('user-1', 'alice', 'alice@example.com', false);
+  test('Successfully retrieves a user by id', async () => {
+    userRepository.findById.mockResolvedValueOnce(Result.ok(mockUser));
 
-      userRepository.findById.mockResolvedValue(Result.success(mockUser));
+    const result = await useCase.execute({ id: mockUser.id });
 
-      const result = await useCase.execute({ id: 'user-1' });
+    expect(userRepository.findById).toHaveBeenCalledTimes(1);
+    expect(userRepository.findById).toHaveBeenCalledWith(mockUser.id);
+    expect(result.isSuccess()).toBe(true);
+    expect(result.value).toEqual(mockUser);
+  });
 
-      expect(result.isSuccess()).toBe(true);
-      expect(result.getValue()).toEqual(mockUser);
-      expect(userRepository.findById).toHaveBeenCalledWith('user-1');
-    });
+  test('Fails when user not found', async () => {
+    userRepository.findById.mockResolvedValueOnce(Result.fail(userNotFoundFailure));
 
-    it('should return failure when user is not found', async () => {
-      userRepository.findById.mockResolvedValue(
-        Result.failure(new UserNotFoundFailure()),
-      );
+    const result = await useCase.execute({ id: 'non-existent-id' });
 
-      const result = await useCase.execute({ id: 'nonexistent' });
-
-      expect(result.isFailure()).toBe(true);
-      expect(result.getFailure()).toBeInstanceOf(UserNotFoundFailure);
-    });
+    expect(userRepository.findById).toHaveBeenCalledTimes(1);
+    expect(userRepository.findById).toHaveBeenCalledWith('non-existent-id');
+    expect(result.isFailure()).toBe(true);
+    expect(result.failure).toEqual(userNotFoundFailure);
   });
 });

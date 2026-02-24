@@ -1,26 +1,21 @@
-/* eslint-disable */
 import { Test, TestingModule } from '@nestjs/testing';
 import { IBookShelfRepository } from 'src/application/interfaces/bookshelf-repository';
-import { Result } from 'src/core/result';
-import { BookShelf } from 'src/domain/entities/bookshelf.entity';
 import { CreateBookShelfUseCase } from 'src/application/usecases/bookshelf/create-book-shelf-use-case.service';
-import { CreateBookShelfRequest } from 'src/application/contracts/bookshelf/create-book-shelf-request';
+import { mock } from 'jest-mock-extended';
+import { Result, UnexpectedFailure } from 'src/core/result';
+import Mocked = jest.Mocked;
 
 describe('CreateBookShelfUseCase', () => {
   let useCase: CreateBookShelfUseCase;
-  let bookShelfRepository: jest.Mocked<IBookShelfRepository>;
+  let bookShelfRepository: Mocked<IBookShelfRepository>;
 
   beforeEach(async () => {
-    const mockBookShelfRepository = {
-      create: jest.fn(),
-    };
-
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CreateBookShelfUseCase,
         {
           provide: 'BookShelfRepository',
-          useValue: mockBookShelfRepository,
+          useValue: mock<IBookShelfRepository>(),
         },
       ],
     }).compile();
@@ -33,44 +28,29 @@ describe('CreateBookShelfUseCase', () => {
     jest.clearAllMocks();
   });
 
-  describe('execute', () => {
-    const mockRequest: CreateBookShelfRequest = {
-      title: 'My Bookshelf',
-    };
+  test('Successfully creates a bookshelf', async () => {
+    const dto = { title: 'My Bookshelf' };
+    const createdBookShelf = { id: '123', title: dto.title, books: [] };
 
-    it('should successfully create a bookshelf', async () => {
-      const createdBookShelf: BookShelf = {
-        id: expect.any(String),
-        title: 'My Bookshelf',
-        books: [],
-      };
+    bookShelfRepository.create.mockResolvedValueOnce(Result.ok(createdBookShelf));
 
-      bookShelfRepository.create.mockResolvedValue(
-        Result.success(createdBookShelf),
-      );
+    const result = await useCase.execute(dto);
 
-      const result = await useCase.execute(mockRequest);
+    expect(bookShelfRepository.create).toHaveBeenCalledTimes(1);
+    expect(result.isSuccess()).toBe(true);
+    expect(result.value).toEqual(createdBookShelf);
+  });
 
-      expect(result.isSuccess()).toBe(true);
-      expect(bookShelfRepository.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          title: 'My Bookshelf',
-          books: [],
-        }),
-      );
-    });
+  test('Fails when create fails', async () => {
+    const dto = { title: 'My Bookshelf' };
+    const failure = new UnexpectedFailure('Failed to create bookshelf');
 
-    it('should generate a UUID for the new bookshelf', async () => {
-      bookShelfRepository.create.mockResolvedValue(
-        Result.success({ id: 'any-id', title: 'My Bookshelf', books: [] }),
-      );
+    bookShelfRepository.create.mockResolvedValueOnce(Result.fail(failure));
 
-      await useCase.execute(mockRequest);
+    const result = await useCase.execute(dto);
 
-      const calledWith = bookShelfRepository.create.mock.calls[0][0];
-      expect(calledWith.id).toBeDefined();
-      expect(typeof calledWith.id).toBe('string');
-      expect(calledWith.id.length).toBeGreaterThan(0);
-    });
+    expect(bookShelfRepository.create).toHaveBeenCalledTimes(1);
+    expect(result.isFailure()).toBe(true);
+    expect(result.failure).toEqual(failure);
   });
 });

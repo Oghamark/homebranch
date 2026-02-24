@@ -1,26 +1,24 @@
-/* eslint-disable */
 import { Test, TestingModule } from '@nestjs/testing';
 import { IBookShelfRepository } from 'src/application/interfaces/bookshelf-repository';
-import { Result } from 'src/core/result';
-import { BookShelf } from 'src/domain/entities/bookshelf.entity';
 import { GetBookShelvesUseCase } from 'src/application/usecases/bookshelf/get-book-shelves-use-case.service';
+import { mock } from 'jest-mock-extended';
+import { Result } from 'src/core/result';
 import { PaginationResult } from 'src/core/pagination_result';
+import { BookShelf } from 'src/domain/entities/bookshelf.entity';
+import { mockBookShelf } from 'test/mocks/bookShelfMocks';
+import Mocked = jest.Mocked;
 
 describe('GetBookShelvesUseCase', () => {
   let useCase: GetBookShelvesUseCase;
-  let bookShelfRepository: jest.Mocked<IBookShelfRepository>;
+  let bookShelfRepository: Mocked<IBookShelfRepository>;
 
   beforeEach(async () => {
-    const mockBookShelfRepository = {
-      findAll: jest.fn(),
-    };
-
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         GetBookShelvesUseCase,
         {
           provide: 'BookShelfRepository',
-          useValue: mockBookShelfRepository,
+          useValue: mock<IBookShelfRepository>(),
         },
       ],
     }).compile();
@@ -33,49 +31,22 @@ describe('GetBookShelvesUseCase', () => {
     jest.clearAllMocks();
   });
 
-  describe('execute', () => {
-    const mockBookShelves: BookShelf[] = [
-      { id: 'shelf-1', title: 'Fiction', books: [] },
-      { id: 'shelf-2', title: 'Non-Fiction', books: [] },
-    ];
+  test('Successfully retrieves paginated bookshelves', async () => {
+    const mockBookshelves = [mockBookShelf, new BookShelf('2', 'Another Shelf', [])];
+    const paginationResult: PaginationResult<BookShelf[]> = {
+      data: mockBookshelves,
+      limit: 10,
+      offset: 0,
+      total: 2,
+      nextCursor: null,
+    };
+    bookShelfRepository.findAll.mockResolvedValueOnce(Result.ok(paginationResult));
 
-    it('should return paginated bookshelves', async () => {
-      const paginatedResult: PaginationResult<BookShelf[]> = {
-        data: mockBookShelves,
-        limit: 10,
-        offset: 0,
-        total: 2,
-        nextCursor: null,
-      };
+    const result = await useCase.execute({ limit: 10, offset: 0 });
 
-      bookShelfRepository.findAll.mockResolvedValue(
-        Result.success(paginatedResult),
-      );
-
-      const result = await useCase.execute({ limit: 10, offset: 0 });
-
-      expect(result.isSuccess()).toBe(true);
-      expect(result.getValue().data).toHaveLength(2);
-      expect(result.getValue().total).toBe(2);
-      expect(bookShelfRepository.findAll).toHaveBeenCalledWith(10, 0);
-    });
-
-    it('should pass limit and offset to repository', async () => {
-      const paginatedResult: PaginationResult<BookShelf[]> = {
-        data: [],
-        limit: 5,
-        offset: 10,
-        total: 0,
-        nextCursor: null,
-      };
-
-      bookShelfRepository.findAll.mockResolvedValue(
-        Result.success(paginatedResult),
-      );
-
-      await useCase.execute({ limit: 5, offset: 10 });
-
-      expect(bookShelfRepository.findAll).toHaveBeenCalledWith(5, 10);
-    });
+    expect(bookShelfRepository.findAll).toHaveBeenCalledTimes(1);
+    expect(bookShelfRepository.findAll).toHaveBeenCalledWith(10, 0);
+    expect(result.isSuccess()).toBe(true);
+    expect(result.value).toEqual(paginationResult);
   });
 });

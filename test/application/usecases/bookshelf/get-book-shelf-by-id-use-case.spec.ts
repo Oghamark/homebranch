@@ -1,26 +1,25 @@
-/* eslint-disable */
 import { Test, TestingModule } from '@nestjs/testing';
 import { IBookShelfRepository } from 'src/application/interfaces/bookshelf-repository';
-import { Result } from 'src/core/result';
-import { BookShelf } from 'src/domain/entities/bookshelf.entity';
 import { GetBookShelfByIdUseCase } from 'src/application/usecases/bookshelf/get-book-shelf-by-id-use-case.service';
+import { mock } from 'jest-mock-extended';
+import { mockBookShelf } from 'test/mocks/bookShelfMocks';
+import { Result } from 'src/core/result';
 import { BookShelfNotFoundFailure } from 'src/domain/failures/bookshelf.failures';
+import Mocked = jest.Mocked;
 
 describe('GetBookShelfByIdUseCase', () => {
   let useCase: GetBookShelfByIdUseCase;
-  let bookShelfRepository: jest.Mocked<IBookShelfRepository>;
+  let bookShelfRepository: Mocked<IBookShelfRepository>;
+
+  const bookshelfNotFoundFailure = new BookShelfNotFoundFailure();
 
   beforeEach(async () => {
-    const mockBookShelfRepository = {
-      findById: jest.fn(),
-    };
-
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         GetBookShelfByIdUseCase,
         {
           provide: 'BookShelfRepository',
-          useValue: mockBookShelfRepository,
+          useValue: mock<IBookShelfRepository>(),
         },
       ],
     }).compile();
@@ -33,39 +32,25 @@ describe('GetBookShelfByIdUseCase', () => {
     jest.clearAllMocks();
   });
 
-  describe('execute', () => {
-    const mockBookShelf: BookShelf = {
-      id: 'bookshelf-123',
-      title: 'My Bookshelf',
-      books: [],
-    };
+  test('Successfully retrieves a bookshelf by ID', async () => {
+    bookShelfRepository.findById.mockResolvedValueOnce(Result.ok(mockBookShelf));
 
-    it('should return a bookshelf when found', async () => {
-      bookShelfRepository.findById.mockResolvedValue(
-        Result.success(mockBookShelf),
-      );
+    const result = await useCase.execute({ id: mockBookShelf.id });
 
-      const result = await useCase.execute({ id: 'bookshelf-123' });
+    expect(bookShelfRepository.findById).toHaveBeenCalledTimes(1);
+    expect(bookShelfRepository.findById).toHaveBeenCalledWith(mockBookShelf.id);
+    expect(result.isSuccess()).toBe(true);
+    expect(result.value).toEqual(mockBookShelf);
+  });
 
-      expect(result.isSuccess()).toBe(true);
-      expect(result.getValue()).toEqual(mockBookShelf);
-      expect(bookShelfRepository.findById).toHaveBeenCalledWith(
-        'bookshelf-123',
-      );
-    });
+  test('Fails when bookshelf not found', async () => {
+    bookShelfRepository.findById.mockResolvedValueOnce(Result.fail(bookshelfNotFoundFailure));
 
-    it('should return failure when bookshelf is not found', async () => {
-      bookShelfRepository.findById.mockResolvedValue(
-        Result.failure(new BookShelfNotFoundFailure()),
-      );
+    const result = await useCase.execute({ id: 'non-existent-id' });
 
-      const result = await useCase.execute({ id: 'nonexistent-id' });
-
-      expect(result.isSuccess()).toBe(false);
-      expect(result.getFailure()).toBeInstanceOf(BookShelfNotFoundFailure);
-      expect(bookShelfRepository.findById).toHaveBeenCalledWith(
-        'nonexistent-id',
-      );
-    });
+    expect(bookShelfRepository.findById).toHaveBeenCalledTimes(1);
+    expect(bookShelfRepository.findById).toHaveBeenCalledWith('non-existent-id');
+    expect(result.isFailure()).toBe(true);
+    expect(result.failure).toEqual(bookshelfNotFoundFailure);
   });
 });

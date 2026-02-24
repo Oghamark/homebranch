@@ -1,26 +1,24 @@
-/* eslint-disable */
 import { Test, TestingModule } from '@nestjs/testing';
 import { IRoleRepository } from 'src/application/interfaces/role-repository';
+import { GetRolesUseCase } from 'src/application/usecases/role/get-roles.usecase';
+import { mock } from 'jest-mock-extended';
+import { mockRole } from 'test/mocks/roleMocks';
 import { Result } from 'src/core/result';
 import { Role } from 'src/domain/entities/role.entity';
 import { Permission } from 'src/domain/value-objects/permission.enum';
-import { GetRolesUseCase } from 'src/application/usecases/role/get-roles.usecase';
+import Mocked = jest.Mocked;
 
 describe('GetRolesUseCase', () => {
   let useCase: GetRolesUseCase;
-  let roleRepository: jest.Mocked<IRoleRepository>;
+  let roleRepository: Mocked<IRoleRepository>;
 
   beforeEach(async () => {
-    const mockRoleRepository = {
-      findAll: jest.fn(),
-    };
-
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         GetRolesUseCase,
         {
           provide: 'RoleRepository',
-          useValue: mockRoleRepository,
+          useValue: mock<IRoleRepository>(),
         },
       ],
     }).compile();
@@ -33,23 +31,24 @@ describe('GetRolesUseCase', () => {
     jest.clearAllMocks();
   });
 
-  describe('execute', () => {
-    it('should return a list of roles', async () => {
-      const mockRoles: Role[] = [
-        new Role('role-1', 'admin', [
-          Permission.MANAGE_USERS,
-          Permission.MANAGE_ROLES,
-        ]),
-        new Role('role-2', 'user', []),
-      ];
+  test('Successfully retrieves all roles', async () => {
+    const mockRoles = [mockRole, new Role('role-2', 'viewer', [Permission.MANAGE_ROLES])];
+    roleRepository.findAll.mockResolvedValueOnce(Result.ok(mockRoles));
 
-      roleRepository.findAll.mockResolvedValue(Result.success(mockRoles));
+    const result = await useCase.execute();
 
-      const result = await useCase.execute();
+    expect(roleRepository.findAll).toHaveBeenCalledTimes(1);
+    expect(result.isSuccess()).toBe(true);
+    expect(result.value).toEqual(mockRoles);
+  });
 
-      expect(result.isSuccess()).toBe(true);
-      expect(result.getValue()).toHaveLength(2);
-      expect(roleRepository.findAll).toHaveBeenCalled();
-    });
+  test('Returns empty array when no roles exist', async () => {
+    roleRepository.findAll.mockResolvedValueOnce(Result.ok([]));
+
+    const result = await useCase.execute();
+
+    expect(roleRepository.findAll).toHaveBeenCalledTimes(1);
+    expect(result.isSuccess()).toBe(true);
+    expect(result.value).toEqual([]);
   });
 });
