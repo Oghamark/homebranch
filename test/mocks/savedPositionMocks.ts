@@ -7,4 +7,5 @@ export const mockSavedPosition = new SavedPosition(
   'Chrome Desktop',
   new Date('2024-01-01'),
   new Date('2024-01-01'),
+  0.42,
 );

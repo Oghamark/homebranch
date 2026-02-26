@@ -3,4 +3,5 @@ export class SavePositionRequest {
   userId: string;
   position: string;
   deviceName: string;
+  percentage?: number | null;
 }

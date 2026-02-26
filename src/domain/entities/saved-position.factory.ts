@@ -6,6 +6,7 @@ export class SavedPositionFactory {
     userId: string,
     position: string,
     deviceName: string,
+    percentage?: number | null,
     createdAt?: Date,
     updatedAt?: Date,
   ): SavedPosition {
@@ -23,6 +24,7 @@ export class SavedPositionFactory {
       deviceName,
       createdAt ?? now,
       updatedAt ?? now,
+      percentage ?? null,
     );
   }
 }
