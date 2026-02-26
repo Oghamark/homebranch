@@ -21,6 +21,7 @@ export class SavePositionUseCase
       request.userId,
       request.position,
       request.deviceName,
+      request.percentage,
     );
     return await this.savedPositionRepository.upsert(savedPosition);
   }

@@ -9,6 +9,7 @@ describe('SavedPositionFactory', () => {
         'user-1',
         'epubcfi(/6/4!/4/2/1:0)',
         'Desktop Browser',
+        undefined,
         now,
         now,
       );

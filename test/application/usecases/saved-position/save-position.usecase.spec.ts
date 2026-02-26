@@ -29,8 +29,25 @@ describe('SavePositionUseCase', () => {
     jest.clearAllMocks();
   });
 
-  test('Successfully saves a position', async () => {
+  test('Successfully saves a position with percentage', async () => {
     savedPositionRepository.upsert.mockResolvedValueOnce(Result.ok(mockSavedPosition));
+
+    const result = await useCase.execute({
+      bookId: mockSavedPosition.bookId,
+      userId: mockSavedPosition.userId,
+      position: mockSavedPosition.position,
+      deviceName: mockSavedPosition.deviceName,
+      percentage: 0.42,
+    });
+
+    expect(savedPositionRepository.upsert).toHaveBeenCalledTimes(1);
+    expect(result.isSuccess()).toBe(true);
+    expect(result.value).toEqual(mockSavedPosition);
+  });
+
+  test('Successfully saves a position without percentage (backwards compatibility)', async () => {
+    const savedPositionWithoutPercentage = { ...mockSavedPosition, percentage: null };
+    savedPositionRepository.upsert.mockResolvedValueOnce(Result.ok(savedPositionWithoutPercentage));
 
     const result = await useCase.execute({
       bookId: mockSavedPosition.bookId,
@@ -41,7 +58,7 @@ describe('SavePositionUseCase', () => {
 
     expect(savedPositionRepository.upsert).toHaveBeenCalledTimes(1);
     expect(result.isSuccess()).toBe(true);
-    expect(result.value).toEqual(mockSavedPosition);
+    expect(result.value?.percentage).toBeNull();
   });
 
   test('Fails when upsert operation fails', async () => {

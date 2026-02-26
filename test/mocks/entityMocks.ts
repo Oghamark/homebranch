@@ -50,6 +50,7 @@ export const mockSavedPositionEntity: SavedPositionEntity = {
   userId: mockSavedPosition.userId,
   position: mockSavedPosition.position,
   deviceName: mockSavedPosition.deviceName,
+  percentage: mockSavedPosition.percentage,
   createdAt: mockSavedPosition.createdAt,
   updatedAt: mockSavedPosition.updatedAt,
 };

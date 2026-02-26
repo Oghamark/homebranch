@@ -24,6 +24,9 @@ export class SavedPositionEntity {
   @Column({ name: 'device_name' })
   deviceName: string;
 
+  @Column({ type: 'float', nullable: true, default: null })
+  percentage: number | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
