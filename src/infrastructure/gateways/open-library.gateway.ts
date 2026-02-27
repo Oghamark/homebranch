@@ -89,10 +89,13 @@ export class OpenLibraryGateway {
     );
     const match = exactMatch ?? data.docs[0];
 
-    const authorResponse = await fetch(`${this.baseUrl}${match.key}.json`, {
-      headers: { 'User-Agent': this.userAgent },
-      signal: this.createAbortSignal(),
-    });
+    const authorResponse = await fetch(
+      `${this.baseUrl}/authors/${match.key}.json`,
+      {
+        headers: { 'User-Agent': this.userAgent },
+        signal: this.createAbortSignal(),
+      },
+    );
 
     if (!authorResponse.ok) {
       return { key: match.key, hasBio: false };
