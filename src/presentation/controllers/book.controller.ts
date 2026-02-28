@@ -152,9 +152,11 @@ export class BookController {
 
   @Delete(`:id`)
   @UseGuards(JwtAuthGuard)
-  deleteBook(@Param('id') id: string) {
+  deleteBook(@Req() request: Request, @Param('id') id: string) {
     const deleteBookRequest: DeleteBookRequest = {
       id,
+      requestingUserId: request['user'].id,
+      requestingUserRole: request['user'].roles?.includes('ADMIN') ? 'ADMIN' : 'USER',
     };
     return this.deleteBookUseCase.execute(deleteBookRequest);
   }
