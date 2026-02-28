@@ -9,6 +9,7 @@ export class SavedPositionMapper {
       entity.userId,
       entity.position,
       entity.deviceName,
+      entity.percentage,
       entity.createdAt,
       entity.updatedAt,
     );
@@ -20,6 +21,7 @@ export class SavedPositionMapper {
     entity.userId = domain.userId;
     entity.position = domain.position;
     entity.deviceName = domain.deviceName;
+    entity.percentage = domain.percentage;
     entity.createdAt = domain.createdAt;
     entity.updatedAt = domain.updatedAt;
     return entity;

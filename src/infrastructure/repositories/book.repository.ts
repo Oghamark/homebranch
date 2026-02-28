@@ -14,40 +14,35 @@ import { BookShelf } from 'src/domain/entities/bookshelf.entity';
 
 @Injectable()
 export class TypeOrmBookRepository implements IBookRepository {
-  constructor(
-    @InjectRepository(BookEntity) private repository: Repository<BookEntity>,
-  ) {}
+  constructor(@InjectRepository(BookEntity) private repository: Repository<BookEntity>) {}
 
   async create(entity: Book): Promise<Result<Book>> {
     const bookEntity = BookMapper.toPersistence(entity);
     const savedEntity = await this.repository.save(bookEntity);
-    return Result.success(BookMapper.toDomain(savedEntity));
+    return Result.ok(BookMapper.toDomain(savedEntity));
   }
 
-  async findAll(
-    limit?: number,
-    offset?: number,
-  ): Promise<Result<PaginationResult<Book[]>>> {
+  async findAll(limit?: number, offset?: number, userId?: string): Promise<Result<PaginationResult<Book[]>>> {
     const [bookEntities, total] = await this.repository.findAndCount({
+      where: userId ? { uploadedByUserId: userId } : {},
+      order: { author: 'ASC', title: 'ASC' },
       take: limit,
       skip: offset,
     });
 
-    return Result.success({
+    return Result.ok({
       data: BookMapper.toDomainList(bookEntities),
       limit: limit,
       offset: offset,
       total: total,
-      nextCursor:
-        offset && limit && total > offset + limit ? offset + limit : null,
+      nextCursor: offset && limit && total > offset + limit ? offset + limit : null,
     });
   }
 
   async findById(id: string): Promise<Result<Book>> {
-    const bookEntity =
-      (await this.repository.findOne({ where: { id } })) || null;
-    if (bookEntity) return Result.success(BookMapper.toDomain(bookEntity));
-    return Result.failure(new BookNotFoundFailure());
+    const bookEntity = (await this.repository.findOne({ where: { id } })) || null;
+    if (bookEntity) return Result.ok(BookMapper.toDomain(bookEntity));
+    return Result.fail(new BookNotFoundFailure());
   }
 
   async findByBookShelfId(
@@ -60,45 +55,40 @@ export class TypeOrmBookRepository implements IBookRepository {
       .innerJoin('book.bookShelves', 'shelf', 'shelf.id = :shelfId', {
         shelfId: bookShelf.id,
       })
+      .orderBy('book.author', 'ASC')
+      .addOrderBy('book.title', 'ASC')
       .take(limit)
       .skip(offset)
       .getManyAndCount();
 
-    return Result.success({
+    return Result.ok({
       data: BookMapper.toDomainList(bookEntities),
       limit: limit,
       offset: offset,
       total: total,
-      nextCursor:
-        limit && total > (offset ?? 0) + limit ? (offset ?? 0) + limit : null,
+      nextCursor: limit && total > (offset ?? 0) + limit ? (offset ?? 0) + limit : null,
     });
   }
 
   async update(id: string, book: Book): Promise<Result<Book>> {
     const exists = await this.repository.existsBy({ id: id });
 
-    if (!exists) return Result.failure(new BookNotFoundFailure());
+    if (!exists) return Result.fail(new BookNotFoundFailure());
 
     const bookEntity = BookMapper.toPersistence(book);
     await this.repository.save(bookEntity);
-    return Result.success(BookMapper.toDomain(bookEntity));
+    return Result.ok(BookMapper.toDomain(bookEntity));
   }
 
   async delete(id: string): Promise<Result<Book>> {
     const findBookResult = await this.findById(id);
     if (!findBookResult.isSuccess()) {
-      return Result.failure(new BookNotFoundFailure());
+      return Result.fail(new BookNotFoundFailure());
     }
 
-    const book = findBookResult.getValue();
-    if (
-      existsSync(
-        `${process.env.UPLOADS_DIRECTORY || join(process.cwd(), 'uploads')}/books/${book.fileName}`,
-      )
-    ) {
-      unlinkSync(
-        `${process.env.UPLOADS_DIRECTORY || join(process.cwd(), 'uploads')}/books/${book.fileName}`,
-      );
+    const book = findBookResult.value;
+    if (existsSync(`${process.env.UPLOADS_DIRECTORY || join(process.cwd(), 'uploads')}/books/${book.fileName}`)) {
+      unlinkSync(`${process.env.UPLOADS_DIRECTORY || join(process.cwd(), 'uploads')}/books/${book.fileName}`);
     }
     if (
       existsSync(
@@ -110,80 +100,69 @@ export class TypeOrmBookRepository implements IBookRepository {
       );
     }
     await this.repository.delete(id);
-    return Result.success(book);
+    return Result.ok(book);
   }
 
-  async findByAuthor(
-    author: string,
-    limit?: number,
-    offset?: number,
-  ): Promise<Result<PaginationResult<Book[]>>> {
+  async findByAuthor(author: string, limit?: number, offset?: number, userId?: string): Promise<Result<PaginationResult<Book[]>>> {
     const [bookEntities, total] = await this.repository.findAndCount({
-      where: { author },
+      where: userId ? { author, uploadedByUserId: userId } : { author },
+      order: { title: 'ASC' },
       take: limit,
       skip: offset,
     });
-    return Result.success({
+    return Result.ok({
       data: BookMapper.toDomainList(bookEntities),
       limit: limit,
       offset: offset,
       total: total,
-      nextCursor:
-        limit && total > (offset || 0) + (limit || 0)
-          ? (offset || 0) + (limit || 0)
-          : null,
+      nextCursor: limit && total > (offset || 0) + (limit || 0) ? (offset || 0) + (limit || 0) : null,
     });
   }
 
-  async findFavorites(
-    limit?: number,
-    offset?: number,
-  ): Promise<Result<PaginationResult<Book[]>>> {
+  async findFavorites(limit?: number, offset?: number, userId?: string): Promise<Result<PaginationResult<Book[]>>> {
     const [bookEntities, total] = await this.repository.findAndCount({
-      where: { isFavorite: true },
+      where: userId ? { isFavorite: true, uploadedByUserId: userId } : { isFavorite: true },
+      order: { author: 'ASC', title: 'ASC' },
       take: limit,
       skip: offset,
     });
-    return Result.success({
+    return Result.ok({
       data: BookMapper.toDomainList(bookEntities),
       limit: limit,
       offset: offset,
       total: total,
-      nextCursor:
-        limit && total > (offset || 0) + (limit || 0)
-          ? (offset || 0) + (limit || 0)
-          : null,
+      nextCursor: limit && total > (offset || 0) + (limit || 0) ? (offset || 0) + (limit || 0) : null,
     });
   }
 
   async findByTitle(title: string): Promise<Result<Book>> {
-    const bookEntity =
-      (await this.repository.findOne({ where: { title } })) || null;
-    if (bookEntity) return Result.success(BookMapper.toDomain(bookEntity));
-    return Result.failure(new BookNotFoundFailure());
+    const bookEntity = (await this.repository.findOne({ where: { title } })) || null;
+    if (bookEntity) return Result.ok(BookMapper.toDomain(bookEntity));
+    return Result.fail(new BookNotFoundFailure());
   }
 
-  async searchByTitle(
-    title: string,
-    limit?: number,
-    offset?: number,
-  ): Promise<Result<PaginationResult<Book[]>>> {
-    const [bookEntities, total] = await this.repository
+  async searchByTitle(title: string, limit?: number, offset?: number, userId?: string): Promise<Result<PaginationResult<Book[]>>> {
+    const queryBuilder = this.repository
       .createQueryBuilder('book')
-      .where('LOWER(book.title) LIKE LOWER(:title)', { title: `%${title}%` })
+      .where('LOWER(book.title) LIKE LOWER(:title)', { title: `%${title}%` });
+
+    if (userId) {
+      queryBuilder.andWhere('book.uploadedByUserId = :userId', { userId });
+    }
+
+    const [bookEntities, total] = await queryBuilder
+      .orderBy('book.author', 'ASC')
+      .addOrderBy('book.title', 'ASC')
       .limit(limit)
       .skip(offset)
       .getManyAndCount();
 
-    return Result.success({
+    return Result.ok({
       data: BookMapper.toDomainList(bookEntities),
       limit: limit,
       offset: offset,
       total: total,
-      nextCursor:
-        limit && total > (offset || 0) + (limit || 0)
-          ? (offset || 0) + (limit || 0)
-          : null,
+      nextCursor: limit && total > (offset || 0) + (limit || 0) ? (offset || 0) + (limit || 0) : null,
     });
   }
 
@@ -191,24 +170,61 @@ export class TypeOrmBookRepository implements IBookRepository {
     title: string,
     limit?: number,
     offset?: number,
+    userId?: string,
   ): Promise<Result<PaginationResult<Book[]>>> {
-    const [bookEntities, total] = await this.repository
+    const queryBuilder = this.repository
       .createQueryBuilder('book')
       .where('LOWER(book.title) LIKE LOWER(:title)', { title: `%${title}%` })
-      .andWhere('book.isFavorite = true')
+      .andWhere('book.isFavorite = true');
+
+    if (userId) {
+      queryBuilder.andWhere('book.uploadedByUserId = :userId', { userId });
+    }
+
+    const [bookEntities, total] = await queryBuilder
+      .orderBy('book.author', 'ASC')
+      .addOrderBy('book.title', 'ASC')
       .limit(limit)
       .skip(offset)
       .getManyAndCount();
 
-    return Result.success({
+    return Result.ok({
       data: BookMapper.toDomainList(bookEntities),
       limit: limit,
       offset: offset,
       total: total,
-      nextCursor:
-        limit && total > (offset || 0) + (limit || 0)
-          ? (offset || 0) + (limit || 0)
-          : null,
+      nextCursor: limit && total > (offset || 0) + (limit || 0) ? (offset || 0) + (limit || 0) : null,
+    });
+  }
+
+  async searchByAuthorAndTitle(
+    author: string,
+    title: string,
+    limit?: number,
+    offset?: number,
+    userId?: string,
+  ): Promise<Result<PaginationResult<Book[]>>> {
+    const qb = this.repository
+      .createQueryBuilder('book')
+      .where('book.author = :author', { author })
+      .andWhere('LOWER(book.title) LIKE LOWER(:title)', { title: `%${title}%` });
+
+    if (userId) {
+      qb.andWhere('book.uploadedByUserId = :userId', { userId });
+    }
+
+    const [bookEntities, total] = await qb
+      .orderBy('book.title', 'ASC')
+      .limit(limit)
+      .skip(offset)
+      .getManyAndCount();
+
+    return Result.ok({
+      data: BookMapper.toDomainList(bookEntities),
+      limit: limit,
+      offset: offset,
+      total: total,
+      nextCursor: limit && total > (offset || 0) + (limit || 0) ? (offset || 0) + (limit || 0) : null,
     });
   }
 }

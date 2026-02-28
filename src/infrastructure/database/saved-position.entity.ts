@@ -8,7 +8,6 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { BookEntity } from 'src/infrastructure/database/book.entity';
-import { UserEntity } from 'src/infrastructure/database/user.entity';
 
 @Entity()
 export class SavedPositionEntity {
@@ -24,6 +23,9 @@ export class SavedPositionEntity {
   @Column({ name: 'device_name' })
   deviceName: string;
 
+  @Column({ type: 'float', nullable: true, default: null })
+  percentage: number | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
@@ -33,8 +35,4 @@ export class SavedPositionEntity {
   @ManyToOne(() => BookEntity, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'book_id' })
   book?: BookEntity;
-
-  @ManyToOne(() => UserEntity, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'user_id' })
-  user?: UserEntity;
 }

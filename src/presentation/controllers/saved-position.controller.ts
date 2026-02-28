@@ -43,7 +43,6 @@ export class SavedPositionController {
   }
 
   @Put(':bookId')
-  @HttpCode(204)
   savePosition(
     @Req() req: Request,
     @Param('bookId') bookId: string,
@@ -55,6 +54,7 @@ export class SavedPositionController {
       userId,
       position: dto.position,
       deviceName: dto.deviceName,
+      percentage: dto.percentage,
     });
   }
 

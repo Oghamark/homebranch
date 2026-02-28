@@ -17,12 +17,13 @@ export class UpdateBookUseCase implements UseCase<UpdateBookRequest, Book> {
       return findBookResult;
     }
 
-    const book = findBookResult.getValue();
+    const book = findBookResult.value;
 
     book.title = request.title ?? book.title;
     book.author = request.author ?? book.author;
     book.isFavorite = request.isFavorite ?? book.isFavorite;
     book.publishedYear = request.publishedYear ?? book.publishedYear;
+    book.summary = request.summary !== undefined ? request.summary : book.summary;
 
     return await this.bookRepository.update(request.id, book);
   }

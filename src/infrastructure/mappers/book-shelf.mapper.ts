@@ -9,6 +9,7 @@ export class BookShelfMapper {
       bookShelfEntity.id,
       bookShelfEntity.title,
       BookMapper.toDomainList(bookShelfEntity.books ?? []),
+      bookShelfEntity.createdByUserId,
     );
   }
 
@@ -16,13 +17,16 @@ export class BookShelfMapper {
     return {
       id: bookShelf.id,
       title: bookShelf.title,
+      createdByUserId: bookShelf.createdByUserId,
       books: bookShelf.books.map((book) => BookMapper.toPersistence(book)),
     };
   }
 
   static toDomainList(bookShelfEntityList: BookShelfEntity[]): BookShelf[] {
-    return bookShelfEntityList.map((bookShelfEntity) =>
-      this.toDomain(bookShelfEntity),
-    );
+    return bookShelfEntityList.map((bookShelfEntity) => this.toDomain(bookShelfEntity));
+  }
+
+  static toPersistenceList(bookShelfList: BookShelf[]): BookShelfEntity[] {
+    return bookShelfList.map((bookShelf) => this.toPersistence(bookShelf));
   }
 }

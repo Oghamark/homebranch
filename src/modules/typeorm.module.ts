@@ -4,13 +4,18 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { BookEntity } from 'src/infrastructure/database/book.entity';
 import { SnakeNamingStrategy } from 'typeorm-naming-strategies';
 import { BookShelfEntity } from '../infrastructure/database/book-shelf.entity';
-import { UserEntity } from '../infrastructure/database/user.entity';
-import { RoleEntity } from '../infrastructure/database/role.entity';
 import { SavedPositionEntity } from '../infrastructure/database/saved-position.entity';
+import { AuthorEntity } from '../infrastructure/database/author.entity';
 import { SchemaUpdate1755566512418 } from '../migrations/1755566512418-schema-update';
 import { AddUserAndRoleTables1739836800000 } from '../migrations/1739836800000-AddUserAndRoleTables';
 import { SeedAdminRole1739836800001 } from '../migrations/1739836800001-SeedAdminRole';
 import { AddSavedPositionsTable1755566512419 } from '../migrations/1755566512419-AddSavedPositionsTable';
+import { AddPercentageToSavedPosition1755566512420 } from '../migrations/1755566512420-AddPercentageToSavedPosition';
+import { AddAuthorTable1740614850000 } from '../migrations/1740614850000-AddAuthorTable';
+import { AddSummaryToBook1755566512421 } from '../migrations/1755566512421-AddSummaryToBook';
+import { RemoveUserAndRoleTables1760000000000 } from '../migrations/1760000000000-RemoveUserAndRoleTables';
+import { AddUploadedByUserIdToBook1767225600000 } from '../migrations/1767225600000-AddUploadedByUserIdToBook';
+import { AddCreatedByUserIdToBookShelf1772317868306 } from '../migrations/1772317868306-AddCreatedByUserIdToBookShelf';
 
 @Module({
   imports: [
@@ -50,15 +55,20 @@ import { AddSavedPositionsTable1755566512419 } from '../migrations/1755566512419
           entities: [
             BookEntity,
             BookShelfEntity,
-            UserEntity,
-            RoleEntity,
             SavedPositionEntity,
+            AuthorEntity,
           ],
           migrations: [
             SchemaUpdate1755566512418,
             AddUserAndRoleTables1739836800000,
             SeedAdminRole1739836800001,
             AddSavedPositionsTable1755566512419,
+            AddPercentageToSavedPosition1755566512420,
+            AddAuthorTable1740614850000,
+            AddSummaryToBook1755566512421,
+            RemoveUserAndRoleTables1760000000000,
+            AddUploadedByUserIdToBook1767225600000,
+            AddCreatedByUserIdToBookShelf1772317868306,
           ],
           migrationsRun: true,
           migrationsTableName: 'migration_table',

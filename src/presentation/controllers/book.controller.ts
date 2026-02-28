@@ -8,6 +8,9 @@ import {
   Post,
   Put,
   Query,
+  Req,
+  Res,
+  StreamableFile,
   UploadedFiles,
   UseGuards,
   UseInterceptors,
@@ -29,6 +32,11 @@ import { GetFavoriteBooksUseCase } from 'src/application/usecases/book/get-favor
 import { JwtAuthGuard } from 'src/infrastructure/guards/jwt-auth.guard';
 import { MapResultInterceptor } from '../interceptors/map_result.interceptor';
 import { PaginatedQuery } from 'src/core/paginated-query';
+import { DownloadBookUseCase } from 'src/application/usecases/book/download-book.usecase';
+import { createReadStream, existsSync } from 'fs';
+import { basename } from 'path';
+import { Response, Request } from 'express';
+import { FetchBookSummaryUseCase } from 'src/application/usecases/book/fetch-book-summary.usecase';
 
 @Controller('books')
 @UseInterceptors(MapResultInterceptor)
@@ -40,20 +48,22 @@ export class BookController {
     private readonly createBookUseCase: CreateBookUseCase,
     private readonly deleteBookUseCase: DeleteBookUseCase,
     private readonly updateBookUseCase: UpdateBookUseCase,
+    private readonly downloadBookUseCase: DownloadBookUseCase,
+    private readonly fetchBookSummaryUseCase: FetchBookSummaryUseCase,
   ) {}
 
   private readonly logger = new Logger('BookController');
   @Get()
   @UseGuards(JwtAuthGuard)
-  getBooks(@Query() paginationDto: PaginatedQuery) {
+  getBooks(@Query() paginationDto: PaginatedQuery & { userId?: string }) {
     this.logger.log(`Getting books with title ${paginationDto.query}`);
-    return this.getBooksUseCase.execute(paginationDto);
+    return this.getBooksUseCase.execute({ ...paginationDto });
   }
 
   @Get('favorite')
   @UseGuards(JwtAuthGuard)
-  getFavoriteBooks(@Query() paginationDto: PaginatedQuery) {
-    return this.getFavoriteBooksUseCase.execute(paginationDto);
+  getFavoriteBooks(@Req() req: Request, @Query() paginationDto: PaginatedQuery) {
+    return this.getFavoriteBooksUseCase.execute({ ...paginationDto, userId: req['user']['id'] });
   }
 
   @Get(`:id`)
@@ -119,6 +129,7 @@ export class BookController {
     ),
   )
   createBook(
+    @Req() request: Request,
     @UploadedFiles()
     files: {
       file?: Express.Multer.File[];
@@ -127,22 +138,25 @@ export class BookController {
     @Body()
     createBookRequest: CreateBookRequest,
   ) {
-    const request: CreateBookRequest = {
+    const bookRequest: CreateBookRequest = {
       ...createBookRequest,
       fileName: files.file!.at(0)!.filename,
       coverImageFileName: files.coverImage?.at(0)?.filename,
+      uploadedByUserId: request['user'].id,
     };
 
-    console.log('Create book request:', request);
+    console.log('Create book request:', bookRequest);
 
-    return this.createBookUseCase.execute(request);
+    return this.createBookUseCase.execute(bookRequest);
   }
 
   @Delete(`:id`)
   @UseGuards(JwtAuthGuard)
-  deleteBook(@Param('id') id: string) {
+  deleteBook(@Req() request: Request, @Param('id') id: string) {
     const deleteBookRequest: DeleteBookRequest = {
       id,
+      requestingUserId: request['user'].id,
+      requestingUserRole: request['user'].roles?.includes('ADMIN') ? 'ADMIN' : 'USER',
     };
     return this.deleteBookUseCase.execute(deleteBookRequest);
   }
@@ -156,5 +170,52 @@ export class BookController {
       ...updateBookDto,
     };
     return this.updateBookUseCase.execute(updateBookRequest);
+  }
+
+  @Post(':id/fetch-summary')
+  @UseGuards(JwtAuthGuard)
+  fetchBookSummary(@Param('id') id: string) {
+    return this.fetchBookSummaryUseCase.execute({ id });
+  }
+
+  @Get(':id/download')
+  @UseGuards(JwtAuthGuard)
+  async downloadBook(
+    @Param('id') id: string,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<StreamableFile | void> {
+    const result = await this.downloadBookUseCase.execute({ id });
+
+    if (result.isFailure()) {
+      response
+        .status(404)
+        .json({ success: false, error: result.failure!.code, message: result.failure!.message });
+      return;
+    }
+
+    const book = result.value!;
+    const sanitizedTitle =
+      book.title.replace(/[^\w\s\-]/g, '').trim() || 'book';
+    const uploadsDirectory = process.env.UPLOADS_DIRECTORY || './uploads';
+    const safeFileName = basename(book.fileName);
+    const filePath = join(uploadsDirectory, 'books', safeFileName);
+
+    if (!existsSync(filePath)) {
+      response
+        .status(404)
+        .json({ success: false, error: 'BOOK_FILE_NOT_FOUND', message: 'Book file not found on server' });
+      return;
+    }
+
+    const fileStream = createReadStream(filePath);
+    fileStream.on('error', (streamError) => {
+      this.logger.error(`Error streaming book file: ${streamError.message}`);
+      fileStream.destroy();
+    });
+
+    return new StreamableFile(fileStream, {
+      type: 'application/epub+zip',
+      disposition: `attachment; filename="${sanitizedTitle}.epub"`,
+    });
   }
 }

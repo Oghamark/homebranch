@@ -9,6 +9,8 @@ export class BookFactory {
     isFavorite: boolean = false,
     publishedYear?: number,
     coverImageFileName?: string,
+    summary?: string,
+    uploadedByUserId?: string,
   ): Book {
     if (!title || !author) {
       throw new Error('Title and author are required to create a book.');
@@ -22,6 +24,8 @@ export class BookFactory {
       isFavorite,
       publishedYear,
       coverImageFileName,
+      summary,
+      uploadedByUserId,
     );
   }
 }

@@ -12,6 +12,8 @@ export class BookMapper {
       bookEntity.isFavorite,
       bookEntity.publishedYear,
       bookEntity.coverImageFileName,
+      bookEntity.summary,
+      bookEntity.uploadedByUserId,
     );
   }
 
@@ -24,10 +26,16 @@ export class BookMapper {
       isFavorite: book.isFavorite,
       publishedYear: book.publishedYear,
       coverImageFileName: book.coverImageFileName,
+      summary: book.summary,
+      uploadedByUserId: book.uploadedByUserId,
     };
   }
 
   static toDomainList(bookEntityList: BookEntity[]): Book[] {
     return bookEntityList.map((bookEntity) => this.toDomain(bookEntity));
+  }
+
+  static toPersistenceList(bookList: Book[]): BookEntity[] {
+    return bookList.map((book) => this.toPersistence(book));
   }
 }

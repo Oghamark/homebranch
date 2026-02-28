@@ -3,9 +3,9 @@ import { ConfigModule } from '@nestjs/config';
 import { TypeOrmConfigModule } from './modules/typeorm.module';
 import { BooksModule } from './modules/book.module';
 import { BookShelvesModule } from './modules/book-shelf.module';
-import { UsersModule } from './modules/user.module';
 import { SavedPositionsModule } from './modules/saved-position.module';
 import { HealthModule } from './modules/health.module';
+import { AuthorsModule } from './modules/author.module';
 
 @Module({
   imports: [
@@ -23,8 +23,8 @@ import { HealthModule } from './modules/health.module';
     // Feature modules
     BooksModule,
     BookShelvesModule,
-    UsersModule,
     SavedPositionsModule,
+    AuthorsModule,
   ],
   controllers: [],
   providers: [],

@@ -6,5 +6,6 @@ export class SavedPosition {
     public deviceName: string,
     public createdAt: Date,
     public updatedAt: Date,
+    public percentage: number | null = null,
   ) {}
 }
