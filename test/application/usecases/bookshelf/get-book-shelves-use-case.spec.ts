@@ -45,7 +45,7 @@ describe('GetBookShelvesUseCase', () => {
     const result = await useCase.execute({ limit: 10, offset: 0 });
 
     expect(bookShelfRepository.findAll).toHaveBeenCalledTimes(1);
-    expect(bookShelfRepository.findAll).toHaveBeenCalledWith(10, 0);
+    expect(bookShelfRepository.findAll).toHaveBeenCalledWith(10, 0, undefined);
     expect(result.isSuccess()).toBe(true);
     expect(result.value).toEqual(paginationResult);
   });

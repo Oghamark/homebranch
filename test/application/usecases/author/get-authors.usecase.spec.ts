@@ -43,7 +43,7 @@ describe('GetAuthorsUseCase', () => {
 
     const result = await useCase.execute({ limit: 10, offset: 0 });
 
-    expect(authorRepository.findAll).toHaveBeenCalledWith(undefined, 10, 0);
+    expect(authorRepository.findAll).toHaveBeenCalledWith(undefined, 10, 0, undefined);
     expect(result.isSuccess()).toBe(true);
     expect(result.value).toEqual(paginationResult);
   });
@@ -60,7 +60,7 @@ describe('GetAuthorsUseCase', () => {
 
     const result = await useCase.execute({ query: 'jane', limit: 10, offset: 0 });
 
-    expect(authorRepository.findAll).toHaveBeenCalledWith('jane', 10, 0);
+    expect(authorRepository.findAll).toHaveBeenCalledWith('jane', 10, 0, undefined);
     expect(result.isSuccess()).toBe(true);
   });
 

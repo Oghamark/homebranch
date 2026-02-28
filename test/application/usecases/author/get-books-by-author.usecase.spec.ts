@@ -43,7 +43,7 @@ describe('GetBooksByAuthorUseCase', () => {
 
     const result = await useCase.execute({ name: 'Test Author', limit: 10, offset: 0 });
 
-    expect(bookRepository.findByAuthor).toHaveBeenCalledWith('Test Author', 10, 0);
+    expect(bookRepository.findByAuthor).toHaveBeenCalledWith('Test Author', 10, 0, undefined);
     expect(bookRepository.searchByAuthorAndTitle).not.toHaveBeenCalled();
     expect(result.isSuccess()).toBe(true);
     expect(result.value!.data).toEqual([mockBook]);
@@ -66,7 +66,7 @@ describe('GetBooksByAuthorUseCase', () => {
       offset: 0,
     });
 
-    expect(bookRepository.searchByAuthorAndTitle).toHaveBeenCalledWith('Test Author', 'Test', 10, 0);
+    expect(bookRepository.searchByAuthorAndTitle).toHaveBeenCalledWith('Test Author', 'Test', 10, 0, undefined);
     expect(bookRepository.findByAuthor).not.toHaveBeenCalled();
     expect(result.isSuccess()).toBe(true);
   });
