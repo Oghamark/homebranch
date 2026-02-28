@@ -52,7 +52,7 @@ export class AuthorController {
   @Get(':name/books')
   getBooksByAuthor(
     @Param('name') name: string,
-    @Query() paginatedQuery: PaginatedQuery,
+    @Query() paginatedQuery: PaginatedQuery & { userId?: string },
   ) {
     return this.getBooksByAuthorUseCase.execute({ name, ...paginatedQuery });
   }
