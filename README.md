@@ -1,6 +1,6 @@
 # HomeBranch
 
-The backend API for [HomeBranch](https://github.com/Oghamark/homebranch-web) — a self-hosted e-book library. Manages books, bookshelves, favorites, reading position sync, and user accounts.
+The backend API for [HomeBranch](https://homebranch.app) — a self-hosted e-book library. Manages books, bookshelves, favorites, reading position sync, and user accounts.
 
 **Requires companion services:**
 - [Authentication service](https://github.com/Oghamark/Authentication) — user accounts and JWT sessions
