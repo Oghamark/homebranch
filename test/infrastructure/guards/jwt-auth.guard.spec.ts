@@ -21,9 +21,13 @@ describe('JwtAuthGuard', () => {
     new Date(Date.now() + 3600000),
   );
 
-  function createMockContext(token?: string): ExecutionContext {
+  function createMockContext(options: {
+    cookieToken?: string;
+    authorizationHeader?: string;
+  } = {}): ExecutionContext {
     const request = {
-      cookies: { access_token: token },
+      cookies: { access_token: options.cookieToken },
+      headers: { authorization: options.authorizationHeader },
     };
     return {
       switchToHttp: () => ({
@@ -53,10 +57,10 @@ describe('JwtAuthGuard', () => {
     jest.clearAllMocks();
   });
 
-  it('should return true and attach user to request for a valid token', async () => {
+  it('should return true and attach user to request for a valid cookie token', async () => {
     tokenGateway.verifyAccessToken.mockResolvedValue(mockPayload);
 
-    const context = createMockContext('valid-token');
+    const context = createMockContext({ cookieToken: 'valid-token' });
     const result = await guard.canActivate(context);
 
     expect(result).toBe(true);
@@ -69,6 +73,34 @@ describe('JwtAuthGuard', () => {
     });
   });
 
+  it('should return true and attach user to request for a valid Bearer token', async () => {
+    tokenGateway.verifyAccessToken.mockResolvedValue(mockPayload);
+
+    const context = createMockContext({ authorizationHeader: 'Bearer valid-token' });
+    const result = await guard.canActivate(context);
+
+    expect(result).toBe(true);
+
+    const request = context.switchToHttp().getRequest();
+    expect(request['user']).toEqual({
+      id: mockPayload.userId,
+      email: mockPayload.email,
+      roles: mockPayload.roles,
+    });
+  });
+
+  it('should prefer the cookie token over the Authorization header when both are present', async () => {
+    tokenGateway.verifyAccessToken.mockResolvedValue(mockPayload);
+
+    const context = createMockContext({
+      cookieToken: 'cookie-token',
+      authorizationHeader: 'Bearer header-token',
+    });
+    await guard.canActivate(context);
+
+    expect(tokenGateway.verifyAccessToken).toHaveBeenCalledWith('cookie-token');
+  });
+
   it('should attach roles from the JWT payload to the request user', async () => {
     const adminPayload = new JwtPayload(
       'user-admin',
@@ -79,7 +111,7 @@ describe('JwtAuthGuard', () => {
     );
     tokenGateway.verifyAccessToken.mockResolvedValue(adminPayload);
 
-    const context = createMockContext('admin-token');
+    const context = createMockContext({ cookieToken: 'admin-token' });
     await guard.canActivate(context);
 
     const request = context.switchToHttp().getRequest();
@@ -87,21 +119,28 @@ describe('JwtAuthGuard', () => {
   });
 
   it('should throw InvalidTokenError when no token is provided', async () => {
-    const context = createMockContext(undefined);
+    const context = createMockContext();
     await expect(guard.canActivate(context)).rejects.toThrow(InvalidTokenError);
   });
 
-  it('should throw InvalidTokenError for an invalid token', async () => {
+  it('should throw InvalidTokenError for an invalid cookie token', async () => {
     tokenGateway.verifyAccessToken.mockRejectedValue(new Error('bad token'));
 
-    const context = createMockContext('bad-token');
+    const context = createMockContext({ cookieToken: 'bad-token' });
+    await expect(guard.canActivate(context)).rejects.toThrow(InvalidTokenError);
+  });
+
+  it('should throw InvalidTokenError for an invalid Bearer token', async () => {
+    tokenGateway.verifyAccessToken.mockRejectedValue(new Error('bad token'));
+
+    const context = createMockContext({ authorizationHeader: 'Bearer bad-token' });
     await expect(guard.canActivate(context)).rejects.toThrow(InvalidTokenError);
   });
 
   it('should throw InvalidTokenError when token is expired', async () => {
     tokenGateway.verifyAccessToken.mockRejectedValue(new TokenExpiredError());
 
-    const context = createMockContext('expired-token');
+    const context = createMockContext({ cookieToken: 'expired-token' });
     await expect(guard.canActivate(context)).rejects.toThrow(InvalidTokenError);
   });
 });
