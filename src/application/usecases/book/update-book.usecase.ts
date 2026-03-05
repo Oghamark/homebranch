@@ -4,6 +4,7 @@ import { IBookRepository } from '../../interfaces/book-repository';
 import { Inject, Injectable } from '@nestjs/common';
 import { Result } from 'src/core/result';
 import { UseCase } from 'src/core/usecase';
+import { BookFactory } from 'src/domain/entities/book.factory';
 
 @Injectable()
 export class UpdateBookUseCase implements UseCase<UpdateBookRequest, Book> {
@@ -15,13 +16,7 @@ export class UpdateBookUseCase implements UseCase<UpdateBookRequest, Book> {
       return findBookResult;
     }
 
-    const book = findBookResult.value;
-
-    book.title = request.title ?? book.title;
-    book.author = request.author ?? book.author;
-    book.isFavorite = request.isFavorite ?? book.isFavorite;
-    book.publishedYear = request.publishedYear ?? book.publishedYear;
-    book.summary = request.summary !== undefined ? request.summary : book.summary;
+    const book = BookFactory.reconstitute(findBookResult.value, request);
 
     return await this.bookRepository.update(request.id, book);
   }

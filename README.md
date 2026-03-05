@@ -11,6 +11,8 @@ The backend API for [HomeBranch](https://github.com/Hydraux/homebranch-web) — 
 ## Features
 
 - Book management with file upload (EPUB)
+- Automatic metadata enrichment from Open Library (genres, publisher, language, ratings, summary, ISBN, page count)
+- Optional Google Books enrichment for series info and any fields Open Library didn't populate
 - Bookshelves (collections) with many-to-many book relationships
 - Favorites and Currently Reading lists
 - Cross-device reading position sync
@@ -128,6 +130,21 @@ node dist/main
 | `CORS_ORIGIN` | Allowed CORS origin (e.g. `http://localhost`) |
 | `JWT_ACCESS_SECRET` | JWT signing secret — must match the [authentication service](https://github.com/Hydraux/Authentication) |
 | `UPLOADS_DIRECTORY` | Path where uploaded book files are stored |
+| `GOOGLE_BOOKS_API_KEY` | *(Optional)* Google Books API key — enables Google Books metadata enrichment as a fallback. Without this, only Open Library is used. Can also be set at runtime (see below). |
+
+### Google Books API key (runtime)
+
+The Google Books API key can be set or updated at runtime without restarting the server. A running API key overrides the environment variable.
+
+```http
+PUT /settings/google_books_api_key
+Authorization: (admin JWT cookie)
+Content-Type: application/json
+
+{ "value": "your-api-key-here" }
+```
+
+> Requires `ADMIN` role. Without an API key, Google Books enrichment is skipped and only Open Library is used.
 
 ### Database migrations
 

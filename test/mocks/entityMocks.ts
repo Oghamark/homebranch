@@ -16,9 +16,20 @@ export const mockBookEntity: BookEntity = {
   author: mockBook.author,
   fileName: mockBook.fileName,
   isFavorite: mockBook.isFavorite,
+  genres: mockBook.genres,
   publishedYear: mockBook.publishedYear,
   coverImageFileName: mockBook.coverImageFileName,
+  summary: mockBook.summary,
   uploadedByUserId: mockBook.uploadedByUserId,
+  series: mockBook.series,
+  seriesPosition: mockBook.seriesPosition,
+  isbn: mockBook.isbn,
+  pageCount: mockBook.pageCount,
+  publisher: mockBook.publisher,
+  language: mockBook.language,
+  averageRating: mockBook.averageRating,
+  ratingsCount: mockBook.ratingsCount,
+  metadataFetchedAt: mockBook.metadataFetchedAt,
 };
 
 export const mockBookShelfEntity: BookShelfEntity = {

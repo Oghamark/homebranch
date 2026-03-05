@@ -1,11 +1,20 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { IMetadataGateway } from 'src/application/interfaces/metadata-gateway';
+import { Book } from 'src/domain/entities/book.entity';
+import { Author } from 'src/domain/entities/author.entity';
 
-interface BookSummarySearchDoc {
+interface BookSearchDoc {
   key: string;
+  isbn?: string[];
+  number_of_pages_median?: number;
+  publisher?: string[];
+  language?: string[];
+  average_rating?: number;
+  ratings_count?: number;
 }
 
 interface BookSummarySearchResponse {
-  docs: BookSummarySearchDoc[];
+  docs: BookSearchDoc[];
 }
 
 interface OpenLibraryDescriptionObject {
@@ -14,11 +23,18 @@ interface OpenLibraryDescriptionObject {
 
 interface OpenLibraryWorkResponse {
   description?: string | OpenLibraryDescriptionObject;
+  subjects?: string[];
 }
 
-interface AuthorEnrichment {
-  biography: string | null;
-  photoUrl: string | null;
+interface BookEnrichment {
+  isbn: string | null;
+  pageCount: number | null;
+  publisher: string | null;
+  language: string | null;
+  genres: string[] | null;
+  averageRating: number | null;
+  ratingsCount: number | null;
+  summary: string | null;
 }
 
 interface OpenLibraryAuthorSearchDoc {
@@ -44,7 +60,7 @@ interface AuthorSearchResult {
 }
 
 @Injectable()
-export class OpenLibraryGateway {
+export class OpenLibraryGateway implements IMetadataGateway {
   private readonly logger = new Logger(OpenLibraryGateway.name);
   private readonly baseUrl = 'https://openlibrary.org';
   private readonly coversUrl = 'https://covers.openlibrary.org';
@@ -55,73 +71,112 @@ export class OpenLibraryGateway {
     return AbortSignal.timeout(this.timeoutMs);
   }
 
-  async findBookSummary(title: string, author: string): Promise<string | null> {
+  async enrichBook(book: Book): Promise<Book> {
     try {
-      const searchUrl = `${this.baseUrl}/search.json?title=${encodeURIComponent(title)}&author=${encodeURIComponent(author)}&limit=1&fields=key`;
-      const searchResponse = await fetch(searchUrl, {
-        headers: { 'User-Agent': this.userAgent },
-        signal: this.createAbortSignal(),
-      });
-
-      if (!searchResponse.ok) {
-        return null;
+      const bookDoc = await this.searchBook(book.title, book.author);
+      if (!bookDoc) {
+        this.logger.log(`No Open Library result for "${book.title}" by "${book.author}"`);
+        book.metadataFetchedAt = new Date();
+        return book;
       }
 
-      const searchData = (await searchResponse.json()) as BookSummarySearchResponse;
-
-      if (!searchData.docs || searchData.docs.length === 0) {
-        return null;
+      const workDetails = await this.fetchWorkDetails(bookDoc.key);
+      if (!workDetails) {
+        this.logger.log(`Could not fetch work details for "${book.title}" (key: ${bookDoc.key})`);
+        book.metadataFetchedAt = new Date();
+        return book;
       }
 
-      const workKey = searchData.docs[0].key;
-      const workUrl = `${this.baseUrl}${workKey}.json`;
-      const workResponse = await fetch(workUrl, {
-        headers: { 'User-Agent': this.userAgent },
-        signal: this.createAbortSignal(),
-      });
+      if (!book.isbn) book.isbn = bookDoc.isbn?.at(0);
+      if (!book.pageCount) book.pageCount = bookDoc.number_of_pages_median;
+      if (!book.publisher) book.publisher = bookDoc.publisher?.at(0);
+      if (!book.language) book.language = bookDoc.language?.at(0);
+      if (!book.genres?.length) book.genres = workDetails.genres?.slice(0, 5) ?? [];
+      if (!book.averageRating) book.averageRating = bookDoc.average_rating;
+      if (!book.ratingsCount) book.ratingsCount = bookDoc.ratings_count;
+      if (!book.summary) book.summary = workDetails.summary ?? undefined;
+      book.metadataFetchedAt = new Date();
 
-      if (!workResponse.ok) {
-        return null;
-      }
-
-      const workData = (await workResponse.json()) as OpenLibraryWorkResponse;
-
-      if (!workData.description) {
-        return null;
-      }
-
-      if (typeof workData.description === 'string') {
-        return workData.description;
-      }
-
-      return workData.description.value ?? null;
+      this.logger.log(`Enriched "${book.title}" from Open Library`);
+      return book;
     } catch (error) {
       const cause = error instanceof TypeError && error.cause instanceof Error ? ` (${error.cause.message})` : '';
       this.logger.warn(
-        `Failed to fetch book summary for "${title}" by "${author}" from Open Library: ${error instanceof Error ? error.message : String(error)}${cause}`,
+        `Failed to fetch book summary for "${book.title}" by "${book.author}" from Open Library: ${error instanceof Error ? error.message : String(error)}${cause}`,
       );
-      return null;
+      return book;
     }
   }
 
-  async findAuthorEnrichment(name: string): Promise<AuthorEnrichment> {
+  private async searchBook(title: string, author: string): Promise<BookSearchDoc | null> {
+    const url = `${this.baseUrl}/search.json?title=${encodeURIComponent(title)}&author=${encodeURIComponent(author)}&limit=1&fields=key,isbn,number_of_pages_median,publisher,language,average_rating,ratings_count`;
+    const response = await fetch(url, {
+      headers: { 'User-Agent': this.userAgent },
+      signal: this.createAbortSignal(),
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const data = (await response.json()) as BookSummarySearchResponse;
+
+    if (!data.docs || data.docs.length === 0) {
+      return null;
+    }
+
+    return data.docs[0];
+  }
+
+  private async fetchWorkDetails(workKey: string): Promise<Pick<BookEnrichment, 'genres' | 'summary'> | null> {
+    const url = `${this.baseUrl}${workKey}.json`;
+    const response = await fetch(url, {
+      headers: { 'User-Agent': this.userAgent },
+      signal: this.createAbortSignal(),
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const data = (await response.json()) as OpenLibraryWorkResponse;
+
+    const summary = data.description
+      ? typeof data.description === 'string'
+        ? data.description
+        : data.description.value
+      : null;
+
+    const genres = data.subjects
+      ? data.subjects
+          .filter((subject) => !subject.includes(',') && !subject.includes('(') && !subject.includes(')'))
+          .slice(0, 5)
+      : null;
+
+    return { genres, summary };
+  }
+
+  async enrichAuthor(author: Author): Promise<Author> {
     try {
-      const searchResult = await this.searchAuthorByName(name);
+      const searchResult = await this.searchAuthorByName(author.name);
       if (!searchResult) {
-        return { biography: null, photoUrl: null };
+        return author;
       }
 
       const olid = searchResult.key.replace('/authors/', '');
       const biography = searchResult.hasBio ? await this.fetchAuthorBiography(olid) : null;
       const photoUrl = await this.fetchAuthorPhotoUrl(olid);
 
-      return { biography, photoUrl };
+      author.biography = biography;
+      author.profilePictureUrl = photoUrl;
+
+      return author;
     } catch (error) {
       const cause = error instanceof TypeError && error.cause instanceof Error ? ` (${error.cause.message})` : '';
       this.logger.warn(
-        `Failed to enrich author "${name}" from Open Library: ${error instanceof Error ? error.message : String(error)}${cause}`,
+        `Failed to enrich author "${author.name}" from Open Library: ${error instanceof Error ? error.message : String(error)}${cause}`,
       );
-      return { biography: null, photoUrl: null };
+      return author;
     }
   }
 

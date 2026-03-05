@@ -1,16 +1,19 @@
-import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { IsNumber, IsOptional, IsString } from 'class-validator';
 
 export class CreateBookRequest {
-  @IsNotEmpty({ message: 'Title is required' })
+  @IsOptional()
   @IsString({ message: 'Invalid title' })
   title: string;
 
-  @IsNotEmpty({ message: 'Author is required' })
+  @IsOptional()
   @IsString({ message: 'Invalid author' })
   author: string;
 
   @IsOptional()
   isFavorite?: boolean;
+
+  @IsOptional()
+  genres?: string[];
 
   @IsOptional()
   @IsString({ message: 'Invalid Published Year' })
@@ -25,4 +28,36 @@ export class CreateBookRequest {
   coverImageFileName?: string;
 
   uploadedByUserId: string;
+
+  @IsOptional()
+  @IsString()
+  series?: string;
+
+  @IsOptional()
+  @IsNumber()
+  seriesPosition?: number;
+
+  @IsOptional()
+  @IsString()
+  isbn?: string;
+
+  @IsOptional()
+  @IsNumber()
+  pageCount?: number;
+
+  @IsOptional()
+  @IsString()
+  publisher?: string;
+
+  @IsOptional()
+  @IsString()
+  language?: string;
+
+  @IsOptional()
+  @IsNumber()
+  averageRating?: number;
+
+  @IsOptional()
+  @IsNumber()
+  ratingsCount?: number;
 }

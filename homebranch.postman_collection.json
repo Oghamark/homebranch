@@ -1,0 +1,965 @@
+{
+  "info": {
+    "_postman_id": "homebranch-api-collection",
+    "name": "Homebranch API",
+    "description": "End-to-end test collection for the Homebranch NestJS API.\n\nAll protected endpoints require a valid JWT token stored in the `access_token` cookie. Set the `baseUrl` variable to match your running instance (default: http://localhost:3000).\n\nNote: There are no login/register endpoints — set the `access_token` cookie variable manually if needed.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "id": "f17a07e2-65bd-488b-933a-025ddcd52ff2",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": "Public endpoint — no authentication required."
+          },
+          "response": []
+        }
+      ],
+      "id": "dfad0039-5d69-443d-8cd2-68b12c64df62"
+    },
+    {
+      "name": "Authors",
+      "item": [
+        {
+          "name": "List Authors",
+          "id": "0967c86d-c05c-4c5f-a262-be1ddf59f1ba",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/authors?limit=20&offset=0",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "authors"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20",
+                  "description": "Max results to return"
+                },
+                {
+                  "key": "offset",
+                  "value": "0",
+                  "description": "Pagination offset"
+                },
+                {
+                  "key": "query",
+                  "value": "",
+                  "description": "Search string",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Author by Name",
+          "id": "f0a41ad6-7ac0-4b5b-beee-4206c656d8c8",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/authors/{{authorName}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "authors",
+                "{{authorName}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Books by Author",
+          "id": "ad335b3e-8709-4e7f-9b01-b6a4d6b85e80",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/authors/{{authorName}}/books?limit=20&offset=0",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "authors",
+                "{{authorName}}",
+                "books"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                },
+                {
+                  "key": "query",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Author Biography",
+          "id": "d9da329e-3d85-4ac0-a8b7-f75096cbda9b",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"biography\": \"Updated biography text here.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/authors/{{authorName}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "authors",
+                "{{authorName}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Upload Author Profile Picture",
+          "id": "0bc5f192-ea42-4adf-95fe-70159a810565",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "description": "JPEG image file for the author's profile picture",
+                  "src": [
+                    ""
+                  ]
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/authors/{{authorName}}/profile-picture",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "authors",
+                "{{authorName}}",
+                "profile-picture"
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "id": "737845dc-2839-4d81-879c-ea81019ea7ce"
+    },
+    {
+      "name": "Books",
+      "item": [
+        {
+          "name": "List Books",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json && json.length > 0) {",
+                  "    pm.collectionVariables.set('bookId', json[0].id);",
+                  "    console.log('bookId set to', json[0].id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "b0a2fc94-5168-42cc-a5b4-a586e8f78aaa",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/books?limit=20&offset=0",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "books"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                },
+                {
+                  "key": "query",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Favorite Books",
+          "id": "d4f5a8f1-0269-437d-bc04-36c2cc8da392",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/books/favorite?limit=20&offset=0",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "books",
+                "favorite"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Book by ID",
+          "id": "5b84554b-ff01-4402-91bb-f036ab3e2898",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/books/{{bookId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "books",
+                "{{bookId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Upload Book",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json && json.id) {",
+                  "    pm.collectionVariables.set('bookId', json.id);",
+                  "    console.log('bookId set to', json.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "82ae12c0-13c1-44ea-b889-68c4d25bcfb1",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "description": "EPUB file (required)",
+                  "src": [
+                    ""
+                  ]
+                },
+                {
+                  "key": "coverImage",
+                  "type": "file",
+                  "description": "Cover image JPG (optional)",
+                  "src": [
+                    ""
+                  ],
+                  "disabled": true
+                },
+                {
+                  "key": "title",
+                  "value": "My Book Title",
+                  "type": "text",
+                  "description": "Required"
+                },
+                {
+                  "key": "author",
+                  "value": "Author Name",
+                  "type": "text",
+                  "description": "Required"
+                },
+                {
+                  "key": "isFavorite",
+                  "value": "false",
+                  "type": "text",
+                  "disabled": true
+                },
+                {
+                  "key": "genres",
+                  "value": "Fiction",
+                  "type": "text",
+                  "disabled": true
+                },
+                {
+                  "key": "publishedYear",
+                  "value": "2024",
+                  "type": "text",
+                  "disabled": true
+                },
+                {
+                  "key": "series",
+                  "value": "",
+                  "type": "text",
+                  "disabled": true
+                },
+                {
+                  "key": "seriesPosition",
+                  "value": "",
+                  "type": "text",
+                  "disabled": true
+                },
+                {
+                  "key": "isbn",
+                  "value": "",
+                  "type": "text",
+                  "disabled": true
+                },
+                {
+                  "key": "pageCount",
+                  "value": "",
+                  "type": "text",
+                  "disabled": true
+                },
+                {
+                  "key": "publisher",
+                  "value": "",
+                  "type": "text",
+                  "disabled": true
+                },
+                {
+                  "key": "language",
+                  "value": "en",
+                  "type": "text",
+                  "disabled": true
+                },
+                {
+                  "key": "averageRating",
+                  "value": "",
+                  "type": "text",
+                  "disabled": true
+                },
+                {
+                  "key": "ratingsCount",
+                  "value": "",
+                  "type": "text",
+                  "disabled": true
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/books",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "books"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Book",
+          "id": "dce3f456-46d8-4278-b4b7-406fac86aea0",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Updated Title\",\n  \"author\": \"Updated Author\",\n  \"isFavorite\": false,\n  \"publishedYear\": 2024,\n  \"summary\": \"A brief summary.\",\n  \"genres\": [\"Fiction\", \"Adventure\"],\n  \"series\": \"\",\n  \"seriesPosition\": null,\n  \"isbn\": \"\",\n  \"pageCount\": 350,\n  \"publisher\": \"\",\n  \"language\": \"en\",\n  \"averageRating\": 4.5,\n  \"ratingsCount\": 100\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/books/{{bookId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "books",
+                "{{bookId}}"
+              ]
+            },
+            "description": "All fields are optional."
+          },
+          "response": []
+        },
+        {
+          "name": "Fetch Book Metadata",
+          "id": "20acb8f3-535d-42cb-8f51-09a7935598fb",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/books/{{bookId}}/fetch-metadata",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "books",
+                "{{bookId}}",
+                "fetch-metadata"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Download Book",
+          "id": "e506d100-2093-448b-bb24-89466ac9ee30",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/books/{{bookId}}/download",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "books",
+                "{{bookId}}",
+                "download"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Book",
+          "id": "6d937aa1-63cd-4397-9133-87e89f6ab6c4",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/books/{{bookId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "books",
+                "{{bookId}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "id": "ba9fb1e8-1f24-4126-a529-3d90c8e0db42"
+    },
+    {
+      "name": "Book Shelves",
+      "item": [
+        {
+          "name": "List Shelves",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json && json.length > 0) {",
+                  "    pm.collectionVariables.set('shelfId', json[0].id);",
+                  "    console.log('shelfId set to', json[0].id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "a557df3c-6817-4736-9ba2-83433a9b64b9",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/book-shelves?limit=20&offset=0",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "book-shelves"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Shelf",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json && json.id) {",
+                  "    pm.collectionVariables.set('shelfId', json.id);",
+                  "    console.log('shelfId set to', json.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "id": "51ef0ba7-b574-477f-9b91-8f25653afc48",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"My Reading List\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/book-shelves",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "book-shelves"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Shelf by ID",
+          "id": "aee97da7-9e78-4e63-b935-c697ec6cee9d",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/book-shelves/{{shelfId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "book-shelves",
+                "{{shelfId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Shelves Containing Book",
+          "id": "b187bd4e-dffa-4610-a887-008d6f362cf5",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/book-shelves/by-book/{{bookId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "book-shelves",
+                "by-book",
+                "{{bookId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Books in Shelf",
+          "id": "4aa33a29-97a3-43d8-a936-9d3c0a7a2321",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/book-shelves/{{shelfId}}/books",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "book-shelves",
+                "{{shelfId}}",
+                "books"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Shelf",
+          "id": "1d41555c-b3fa-46c9-8b90-c0ab3e0f42d6",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Updated Shelf Name\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/book-shelves/{{shelfId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "book-shelves",
+                "{{shelfId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Add Book to Shelf",
+          "id": "69f1e7a9-11db-4b36-aa18-3c1ce1dfa005",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bookId\": \"{{bookId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/book-shelves/{{shelfId}}/add-book",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "book-shelves",
+                "{{shelfId}}",
+                "add-book"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Remove Book from Shelf",
+          "id": "e06984da-494d-4a19-a3a2-1bb50db11d4a",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bookId\": \"{{bookId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/book-shelves/{{shelfId}}/remove-book",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "book-shelves",
+                "{{shelfId}}",
+                "remove-book"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Shelf",
+          "id": "c2fe99cf-423f-4d8a-9796-f6c7be3e32b8",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/book-shelves/{{shelfId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "book-shelves",
+                "{{shelfId}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "id": "c60a640a-5ef8-4ea0-ba3e-d3899ac3fc89"
+    },
+    {
+      "name": "Saved Positions",
+      "item": [
+        {
+          "name": "List Saved Positions for User",
+          "id": "c8ac0f1f-b566-4513-b1ed-0aef1f4f7bce",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/users/{{userId}}/saved-positions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "{{userId}}",
+                "saved-positions"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Saved Position for Book",
+          "id": "e29252bf-faef-4e19-aaac-2f9d62331185",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/users/{{userId}}/saved-positions/{{bookId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "{{userId}}",
+                "saved-positions",
+                "{{bookId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Upsert Saved Position",
+          "id": "3b592488-73a0-49f3-a41c-45dbdf6578bb",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"position\": \"chapter-5\",\n  \"deviceName\": \"My Kindle\",\n  \"percentage\": 0.42\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users/{{userId}}/saved-positions/{{bookId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "{{userId}}",
+                "saved-positions",
+                "{{bookId}}"
+              ]
+            },
+            "description": "`position` and `deviceName` are required. `percentage` is optional (0–1 range)."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Saved Position",
+          "id": "d5528b2d-873c-46c6-b09a-f032585b4359",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/users/{{userId}}/saved-positions/{{bookId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "{{userId}}",
+                "saved-positions",
+                "{{bookId}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "id": "bbdc5cf8-9c05-48b5-a38a-47ab0ce75dfd"
+    }
+  ],
+  "auth": {
+    "type": "apikey",
+    "apikey": [
+      {
+        "key": "key",
+        "value": "access_token",
+        "type": "string"
+      },
+      {
+        "key": "value",
+        "value": "{{access_token}}",
+        "type": "string"
+      },
+      {
+        "key": "in",
+        "value": "header",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "id": "a50416da-79cb-4c93-9f47-9369472c85f0",
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "description": "Base URL of the Homebranch API"
+    },
+    {
+      "id": "bcf79697-88ad-4760-accc-16937bcd7871",
+      "key": "access_token",
+      "value": "",
+      "description": "JWT access token — injected automatically as a cookie on all requests"
+    },
+    {
+      "id": "5bfec29a-7970-49a2-9af1-2a25cc662b33",
+      "key": "bookId",
+      "value": "",
+      "description": "Reusable book ID (set after uploading or listing a book)"
+    },
+    {
+      "id": "1e833967-9fda-43de-ae1b-e60b658217be",
+      "key": "shelfId",
+      "value": "",
+      "description": "Reusable shelf ID (set after creating or listing a shelf)"
+    },
+    {
+      "id": "1e3c3dae-4d67-412b-9306-d469da08a443",
+      "key": "authorName",
+      "value": "",
+      "description": "Reusable author name (URL-encoded when used in paths)"
+    },
+    {
+      "id": "2bd3ab55-acc5-404c-b87c-f13a48f9e5ba",
+      "key": "userId",
+      "value": "",
+      "description": "Reusable user ID for saved-positions endpoints"
+    }
+  ]
+}

@@ -34,7 +34,7 @@ describe('GetBooksUseCase', () => {
   test('Successfully retrieves paginated books', async () => {
     const mockBooks = [
       mockBook,
-      new Book('book-789', 'Another Book', 'Another Author', 'another.epub', false, 2022, 'another-cover.jpg'),
+      new Book('book-789', 'Another Book', 'Another Author', 'another.epub', false, [], 2022, 'another-cover.jpg'),
     ];
     const paginationResult: PaginationResult<Book[]> = {
       data: mockBooks,

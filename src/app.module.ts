@@ -1,11 +1,13 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { TypeOrmConfigModule } from './modules/typeorm.module';
 import { BooksModule } from './modules/book.module';
 import { BookShelvesModule } from './modules/book-shelf.module';
 import { SavedPositionsModule } from './modules/saved-position.module';
 import { HealthModule } from './modules/health.module';
 import { AuthorsModule } from './modules/author.module';
+import { SettingsModule } from './modules/settings.module';
 
 @Module({
   imports: [
@@ -14,6 +16,8 @@ import { AuthorsModule } from './modules/author.module';
       isGlobal: true,
       envFilePath: ['.env.local', '.env'],
     }),
+
+    ScheduleModule.forRoot(),
 
     HealthModule,
 
@@ -25,6 +29,7 @@ import { AuthorsModule } from './modules/author.module';
     BookShelvesModule,
     SavedPositionsModule,
     AuthorsModule,
+    SettingsModule,
   ],
   controllers: [],
   providers: [],

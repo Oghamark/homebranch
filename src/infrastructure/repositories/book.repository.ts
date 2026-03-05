@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { IBookRepository } from 'src/application/interfaces/book-repository';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import { BookEntity } from 'src/infrastructure/database/book.entity';
 import { BookMapper } from '../mappers/book.mapper';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -232,5 +232,14 @@ export class TypeOrmBookRepository implements IBookRepository {
       total: total,
       nextCursor: limit && total > (offset || 0) + (limit || 0) ? (offset || 0) + (limit || 0) : null,
     });
+  }
+
+  async findBooksWithoutMetadata(limit: number): Promise<Result<Book[]>> {
+    const bookEntities = await this.repository.find({
+      where: { metadataFetchedAt: IsNull() },
+      take: limit,
+      order: { title: 'ASC' },
+    });
+    return Result.ok(BookMapper.toDomainList(bookEntities));
   }
 }

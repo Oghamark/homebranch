@@ -13,10 +13,15 @@ import { TypeOrmBookRepository } from 'src/infrastructure/repositories/book.repo
 import { BookController } from 'src/presentation/controllers/book.controller';
 import { AuthModule } from 'src/modules/auth.module';
 import { OpenLibraryGateway } from 'src/infrastructure/gateways/open-library.gateway';
-import { FetchBookSummaryUseCase } from 'src/application/usecases/book/fetch-book-summary.usecase';
+import { GoogleBooksGateway } from 'src/infrastructure/gateways/google-books.gateway';
+import { CompositeMetadataGateway } from 'src/infrastructure/gateways/composite-metadata.gateway';
+import { FetchBookMetadataUseCase } from 'src/application/usecases/book/fetch-book-metadata-use-case.service';
+import { MetadataSchedulerService } from 'src/infrastructure/schedulers/metadata-scheduler.service';
+import { EpubParserService } from 'src/infrastructure/parsers/epub-parser.service';
+import { SettingsModule } from 'src/modules/settings.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([BookEntity]), AuthModule],
+  imports: [TypeOrmModule.forFeature([BookEntity]), AuthModule, SettingsModule],
   providers: [
     // Repository
     {
@@ -32,14 +37,34 @@ import { FetchBookSummaryUseCase } from 'src/application/usecases/book/fetch-boo
     GetFavoriteBooksUseCase,
     GetBookByIdUseCase,
     UpdateBookUseCase,
-    FetchBookSummaryUseCase,
+    FetchBookMetadataUseCase,
     // ... other use cases
 
     // Mappers
     BookMapper,
 
     // Gateways
-    OpenLibraryGateway,
+    {
+      provide: 'OpenLibraryGateway',
+      useClass: OpenLibraryGateway,
+    },
+    {
+      provide: 'GoogleBooksGateway',
+      useClass: GoogleBooksGateway,
+    },
+    {
+      provide: 'MetadataGateway',
+      useClass: CompositeMetadataGateway,
+    },
+
+    // Parsers
+    {
+      provide: 'EpubParser',
+      useClass: EpubParserService,
+    },
+
+    // Schedulers
+    MetadataSchedulerService,
   ],
   controllers: [BookController],
   exports: ['BookRepository'],

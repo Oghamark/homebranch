@@ -26,7 +26,7 @@ import { GetBookByIdUseCase } from 'src/application/usecases/book/get-book-by-id
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { randomUUID } from 'crypto';
-import { join } from 'path';
+import { basename, join } from 'path';
 import { DeleteBookRequest } from 'src/application/contracts/book/delete-book-request';
 import { GetFavoriteBooksUseCase } from 'src/application/usecases/book/get-favorite-books-use-case.service';
 import { JwtAuthGuard } from 'src/infrastructure/guards/jwt-auth.guard';
@@ -34,9 +34,8 @@ import { MapResultInterceptor } from '../interceptors/map_result.interceptor';
 import { PaginatedQuery } from 'src/core/paginated-query';
 import { DownloadBookUseCase } from 'src/application/usecases/book/download-book.usecase';
 import { createReadStream, existsSync } from 'fs';
-import { basename } from 'path';
-import { Response, Request } from 'express';
-import { FetchBookSummaryUseCase } from 'src/application/usecases/book/fetch-book-summary.usecase';
+import { Request, Response } from 'express';
+import { FetchBookMetadataUseCase } from 'src/application/usecases/book/fetch-book-metadata-use-case.service';
 
 @Controller('books')
 @UseInterceptors(MapResultInterceptor)
@@ -49,7 +48,7 @@ export class BookController {
     private readonly deleteBookUseCase: DeleteBookUseCase,
     private readonly updateBookUseCase: UpdateBookUseCase,
     private readonly downloadBookUseCase: DownloadBookUseCase,
-    private readonly fetchBookSummaryUseCase: FetchBookSummaryUseCase,
+    private readonly fetchBookMetadataUseCase: FetchBookMetadataUseCase,
   ) {}
 
   private readonly logger = new Logger('BookController');
@@ -63,6 +62,7 @@ export class BookController {
   @Get('favorite')
   @UseGuards(JwtAuthGuard)
   getFavoriteBooks(@Req() req: Request, @Query() paginationDto: PaginatedQuery) {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment,@typescript-eslint/no-unsafe-member-access
     return this.getFavoriteBooksUseCase.execute({ ...paginationDto, userId: req['user']['id'] });
   }
 
@@ -132,10 +132,9 @@ export class BookController {
       ...createBookRequest,
       fileName: files.file!.at(0)!.filename,
       coverImageFileName: files.coverImage?.at(0)?.filename,
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment,@typescript-eslint/no-unsafe-member-access
       uploadedByUserId: request['user'].id,
     };
-
-    console.log('Create book request:', bookRequest);
 
     return this.createBookUseCase.execute(bookRequest);
   }
@@ -145,8 +144,9 @@ export class BookController {
   deleteBook(@Req() request: Request, @Param('id') id: string) {
     const deleteBookRequest: DeleteBookRequest = {
       id,
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment,@typescript-eslint/no-unsafe-member-access
       requestingUserId: request['user'].id,
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call,@typescript-eslint/no-unsafe-member-access
       requestingUserRole: request['user'].roles?.includes('ADMIN') ? 'ADMIN' : 'USER',
     };
     return this.deleteBookUseCase.execute(deleteBookRequest);
@@ -155,7 +155,6 @@ export class BookController {
   @Put(`:id`)
   @UseGuards(JwtAuthGuard)
   updateBook(@Param('id') id: string, @Body() updateBookDto: UpdateBookDto) {
-    console.log('Update book DTO:', updateBookDto);
     const updateBookRequest: UpdateBookRequest = {
       id,
       ...updateBookDto,
@@ -163,10 +162,10 @@ export class BookController {
     return this.updateBookUseCase.execute(updateBookRequest);
   }
 
-  @Post(':id/fetch-summary')
+  @Post(':id/fetch-metadata')
   @UseGuards(JwtAuthGuard)
   fetchBookSummary(@Param('id') id: string) {
-    return this.fetchBookSummaryUseCase.execute({ id });
+    return this.fetchBookMetadataUseCase.execute({ id });
   }
 
   @Get(':id/download')

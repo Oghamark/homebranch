@@ -26,7 +26,10 @@ import { BooksModule } from 'src/modules/book.module';
     GetBooksByAuthorUseCase,
     UpdateAuthorUseCase,
     UploadAuthorProfilePictureUseCase,
-    OpenLibraryGateway,
+    {
+      provide: 'MetadataGateway',
+      useClass: OpenLibraryGateway,
+    },
     AuthorMapper,
   ],
   controllers: [AuthorController],

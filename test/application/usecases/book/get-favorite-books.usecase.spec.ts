@@ -39,6 +39,7 @@ describe('GetFavoriteBooksUseCase', () => {
       'Another Author',
       'another.epub',
       true,
+      [],
       2023,
       'another-cover.jpg',
     );
