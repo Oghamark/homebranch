@@ -17,6 +17,7 @@ import {
 } from '@nestjs/common';
 import { CreateBookRequest } from 'src/application/contracts/book/create-book-request';
 import { UpdateBookRequest } from 'src/application/contracts/book/update-book-request';
+import { GetBooksRequest } from 'src/application/contracts/book/get-books-request';
 import { CreateBookUseCase } from 'src/application/usecases/book/create-book.usecase';
 import { DeleteBookUseCase } from 'src/application/usecases/book/delete-book.usecase';
 import { GetBooksUseCase } from 'src/application/usecases/book/get-books.usecase';
@@ -31,7 +32,6 @@ import { DeleteBookRequest } from 'src/application/contracts/book/delete-book-re
 import { GetFavoriteBooksUseCase } from 'src/application/usecases/book/get-favorite-books-use-case.service';
 import { JwtAuthGuard } from 'src/infrastructure/guards/jwt-auth.guard';
 import { MapResultInterceptor } from '../interceptors/map_result.interceptor';
-import { PaginatedQuery } from 'src/core/paginated-query';
 import { DownloadBookUseCase } from 'src/application/usecases/book/download-book.usecase';
 import { createReadStream, existsSync } from 'fs';
 import { Request, Response } from 'express';
@@ -54,14 +54,14 @@ export class BookController {
   private readonly logger = new Logger('BookController');
   @Get()
   @UseGuards(JwtAuthGuard)
-  getBooks(@Query() paginationDto: PaginatedQuery & { userId?: string }) {
+  getBooks(@Query() paginationDto: GetBooksRequest) {
     this.logger.log(`Getting books with title ${paginationDto.query}`);
     return this.getBooksUseCase.execute({ ...paginationDto });
   }
 
   @Get('favorite')
   @UseGuards(JwtAuthGuard)
-  getFavoriteBooks(@Req() req: Request, @Query() paginationDto: PaginatedQuery) {
+  getFavoriteBooks(@Req() req: Request, @Query() paginationDto: GetBooksRequest) {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment,@typescript-eslint/no-unsafe-member-access
     return this.getFavoriteBooksUseCase.execute({ ...paginationDto, userId: req['user']['id'] });
   }

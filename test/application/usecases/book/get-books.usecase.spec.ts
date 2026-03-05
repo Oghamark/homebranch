@@ -62,15 +62,51 @@ describe('GetBooksUseCase', () => {
       total: 1,
       nextCursor: null,
     };
-    bookRepository.searchByTitle.mockResolvedValueOnce(Result.ok(paginationResult));
+    bookRepository.searchWithFilters.mockResolvedValueOnce(Result.ok(paginationResult));
 
     const result = await useCase.execute({ limit: 10, offset: 0, query: 'Test Book', userId: 'user-123' });
 
-    expect(bookRepository.searchByTitle).toHaveBeenCalledTimes(1);
-    expect(bookRepository.searchByTitle).toHaveBeenCalledWith('Test Book', 10, 0, 'user-123');
+    expect(bookRepository.searchWithFilters).toHaveBeenCalledTimes(1);
+    expect(bookRepository.searchWithFilters).toHaveBeenCalledWith({ query: 'Test Book', isbn: undefined, genre: undefined, series: undefined, author: undefined }, 10, 0, 'user-123');
     expect(bookRepository.findAll).not.toHaveBeenCalled();
     expect(result.isSuccess()).toBe(true);
     expect(result.value).toEqual(paginationResult);
+  });
+
+  test('Successfully searches books by isbn', async () => {
+    const mockBooks = [mockBook];
+    const paginationResult: PaginationResult<Book[]> = {
+      data: mockBooks,
+      limit: 10,
+      offset: 0,
+      total: 1,
+      nextCursor: null,
+    };
+    bookRepository.searchWithFilters.mockResolvedValueOnce(Result.ok(paginationResult));
+
+    const result = await useCase.execute({ limit: 10, offset: 0, isbn: '9781234567890', userId: 'user-123' });
+
+    expect(bookRepository.searchWithFilters).toHaveBeenCalledTimes(1);
+    expect(bookRepository.searchWithFilters).toHaveBeenCalledWith({ query: undefined, isbn: '9781234567890', genre: undefined, series: undefined, author: undefined }, 10, 0, 'user-123');
+    expect(bookRepository.findAll).not.toHaveBeenCalled();
+    expect(result.isSuccess()).toBe(true);
+  });
+
+  test('Successfully searches books by author', async () => {
+    const mockBooks = [mockBook];
+    const paginationResult: PaginationResult<Book[]> = {
+      data: mockBooks,
+      limit: 10,
+      offset: 0,
+      total: 1,
+      nextCursor: null,
+    };
+    bookRepository.searchWithFilters.mockResolvedValueOnce(Result.ok(paginationResult));
+
+    const result = await useCase.execute({ limit: 10, offset: 0, author: 'Test Author', userId: 'user-123' });
+
+    expect(bookRepository.searchWithFilters).toHaveBeenCalledWith({ query: undefined, isbn: undefined, genre: undefined, series: undefined, author: 'Test Author' }, 10, 0, 'user-123');
+    expect(result.isSuccess()).toBe(true);
   });
 
   test('Returns empty array when no books exist', async () => {

@@ -10,9 +10,10 @@ import { GetBooksRequest } from 'src/application/contracts/book/get-books-reques
 export class GetBooksUseCase implements UseCase<GetBooksRequest, PaginationResult<Book[]>> {
   constructor(@Inject('BookRepository') private bookRepository: IBookRepository) {}
 
-  async execute({ limit, offset, query, userId }: GetBooksRequest): Promise<Result<PaginationResult<Book[]>>> {
-    if (query) {
-      return await this.bookRepository.searchByTitle(query, limit, offset, userId);
+  async execute({ limit, offset, query, userId, isbn, genre, series, author }: GetBooksRequest): Promise<Result<PaginationResult<Book[]>>> {
+    const hasFilters = query || isbn || genre || series || author;
+    if (hasFilters) {
+      return await this.bookRepository.searchWithFilters({ query, isbn, genre, series, author }, limit, offset, userId);
     }
     return await this.bookRepository.findAll(limit, offset, userId);
   }
