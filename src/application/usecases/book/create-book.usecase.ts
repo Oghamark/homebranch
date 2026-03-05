@@ -43,8 +43,7 @@ export class CreateBookUseCase implements UseCase<CreateBookRequest, Book> {
       if (epubMeta.summary) epubSummary = epubMeta.summary;
       if (!enrichedDto.genres?.length && epubMeta.genres?.length) enrichedDto.genres = epubMeta.genres;
       if (!enrichedDto.series && epubMeta.series) enrichedDto.series = epubMeta.series;
-      if (!enrichedDto.seriesPosition && epubMeta.seriesPosition)
-        enrichedDto.seriesPosition = epubMeta.seriesPosition;
+      if (!enrichedDto.seriesPosition && epubMeta.seriesPosition) enrichedDto.seriesPosition = epubMeta.seriesPosition;
 
       // Extract and save cover image from epub if none was uploaded
       if (!enrichedDto.coverImageFileName && epubMeta.coverImageBuffer) {

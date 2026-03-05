@@ -70,4 +70,3 @@ describe('FetchBookMetadataUseCase', () => {
     expect(result.isFailure()).toBe(true);
   });
 });
-

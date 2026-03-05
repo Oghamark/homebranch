@@ -84,4 +84,3 @@ describe('GetAuthorUseCase', () => {
     expect(result.isSuccess()).toBe(true);
   });
 });
-

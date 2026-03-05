@@ -47,6 +47,11 @@ lerna-debug.log*
 .temp
 .tmp
 
+# Postman
+.postman/
+postman/
+homebranch.postman_collection.json
+
 # Runtime data
 pids
 *.pid

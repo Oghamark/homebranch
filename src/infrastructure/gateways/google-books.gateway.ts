@@ -32,7 +32,8 @@ interface GoogleBooksResponse {
   items?: GoogleBooksItem[];
 }
 
-const FIELDS = 'items(volumeInfo(publisher,pageCount,language,categories,averageRating,ratingsCount,description,industryIdentifiers,seriesInfo))';
+const FIELDS =
+  'items(volumeInfo(publisher,pageCount,language,categories,averageRating,ratingsCount,description,industryIdentifiers,seriesInfo))';
 
 @Injectable()
 export class GoogleBooksGateway implements IMetadataGateway {
@@ -40,9 +41,7 @@ export class GoogleBooksGateway implements IMetadataGateway {
   private readonly baseUrl = 'https://www.googleapis.com/books/v1';
   private readonly timeoutMs = 8000;
 
-  constructor(
-    @Inject('SettingRepository') private readonly settingRepository: ISettingRepository,
-  ) {}
+  constructor(@Inject('SettingRepository') private readonly settingRepository: ISettingRepository) {}
 
   private createAbortSignal(): AbortSignal {
     return AbortSignal.timeout(this.timeoutMs);
@@ -74,18 +73,39 @@ export class GoogleBooksGateway implements IMetadataGateway {
         const isbn =
           volumeInfo.industryIdentifiers?.find((id) => id.type === 'ISBN_13')?.identifier ??
           volumeInfo.industryIdentifiers?.find((id) => id.type === 'ISBN_10')?.identifier;
-        if (isbn) { book.isbn = isbn; enriched = true; }
+        if (isbn) {
+          book.isbn = isbn;
+          enriched = true;
+        }
       }
-      if (!book.pageCount && volumeInfo.pageCount) { book.pageCount = volumeInfo.pageCount; enriched = true; }
-      if (!book.publisher && volumeInfo.publisher) { book.publisher = volumeInfo.publisher; enriched = true; }
-      if (!book.language && volumeInfo.language) { book.language = volumeInfo.language; enriched = true; }
+      if (!book.pageCount && volumeInfo.pageCount) {
+        book.pageCount = volumeInfo.pageCount;
+        enriched = true;
+      }
+      if (!book.publisher && volumeInfo.publisher) {
+        book.publisher = volumeInfo.publisher;
+        enriched = true;
+      }
+      if (!book.language && volumeInfo.language) {
+        book.language = volumeInfo.language;
+        enriched = true;
+      }
       if (!book.genres?.length && volumeInfo.categories?.length) {
         book.genres = volumeInfo.categories.slice(0, 5);
         enriched = true;
       }
-      if (!book.averageRating && volumeInfo.averageRating) { book.averageRating = volumeInfo.averageRating; enriched = true; }
-      if (!book.ratingsCount && volumeInfo.ratingsCount) { book.ratingsCount = volumeInfo.ratingsCount; enriched = true; }
-      if (!book.summary && volumeInfo.description) { book.summary = volumeInfo.description; enriched = true; }
+      if (!book.averageRating && volumeInfo.averageRating) {
+        book.averageRating = volumeInfo.averageRating;
+        enriched = true;
+      }
+      if (!book.ratingsCount && volumeInfo.ratingsCount) {
+        book.ratingsCount = volumeInfo.ratingsCount;
+        enriched = true;
+      }
+      if (!book.summary && volumeInfo.description) {
+        book.summary = volumeInfo.description;
+        enriched = true;
+      }
       if (!book.series && volumeInfo.seriesInfo?.shortSeriesBookTitle) {
         book.series = volumeInfo.seriesInfo.shortSeriesBookTitle;
         if (volumeInfo.seriesInfo.bookDisplayNumber) {
