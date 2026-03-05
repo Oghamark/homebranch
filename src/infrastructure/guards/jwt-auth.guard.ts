@@ -13,7 +13,11 @@ export class JwtAuthGuard implements CanActivate {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request: Request = context.switchToHttp().getRequest();
 
-    const token = request.cookies['access_token'] as string;
+    const cookieToken = request.cookies['access_token'] as string | undefined;
+    const bearerToken = request.headers.authorization?.startsWith('Bearer ')
+      ? request.headers.authorization.slice(7)
+      : undefined;
+    const token = cookieToken ?? bearerToken;
     if (!token) {
       throw new InvalidTokenError('No token provided');
     }
