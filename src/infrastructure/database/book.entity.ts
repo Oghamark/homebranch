@@ -1,4 +1,4 @@
-import { Column, Entity, ManyToMany, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, CreateDateColumn, Entity, ManyToMany, PrimaryGeneratedColumn } from 'typeorm';
 import { BookShelfEntity } from 'src/infrastructure/database/book-shelf.entity';
 
 @Entity()
@@ -59,6 +59,9 @@ export class BookEntity {
 
   @Column({ name: 'metadata_fetched_at', nullable: true })
   metadataFetchedAt?: Date;
+
+  @CreateDateColumn({ name: 'created_at' })
+  createdAt: Date;
 
   @ManyToMany(() => BookShelfEntity, (bookShelf) => bookShelf.books)
   bookShelves?: BookShelfEntity[];

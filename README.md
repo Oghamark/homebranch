@@ -18,6 +18,23 @@ The backend API for [HomeBranch](https://homebranch.app) — a self-hosted e-boo
 - Cross-device reading position sync
 - User management with roles and permissions
 - Pagination and search across the library
+- OPDS catalog (v1.2 Atom and v2.0 JSON) for e-reader integration — authenticate with email and password via the companion Auth service
+
+---
+
+## OPDS
+
+Homebranch exposes an OPDS catalog for e-readers (KOReader, Thorium, etc.).
+
+| Feed | URL |
+|---|---|
+| OPDS 1.2 catalog root | `/opds/v1/catalog` |
+| OPDS 2.0 catalog root | `/opds/v2/catalog` |
+| Authentication document | `/opds/v1/auth` *(public)* |
+
+Authentication uses HTTP Basic Auth (email + password). Credentials are forwarded to the companion Auth service — requires `AUTH_SERVICE_URL` to be configured. Without it, the catalog is accessible but login attempts return `401`.
+
+> **Windows / Docker note:** If Thorium is installed from the Microsoft Store, it runs in an AppContainer sandbox that blocks access to `localhost`. Use your machine's LAN IP address (e.g. `http://192.168.1.x:3000/opds/v1/catalog`) instead.
 
 ---
 
@@ -131,6 +148,7 @@ node dist/main
 | `JWT_ACCESS_SECRET` | JWT signing secret — must match the [authentication service](https://github.com/Hydraux/Authentication) |
 | `UPLOADS_DIRECTORY` | Path where uploaded book files are stored |
 | `GOOGLE_BOOKS_API_KEY` | *(Optional)* Google Books API key — enables Google Books metadata enrichment as a fallback. Without this, only Open Library is used. Can also be set at runtime (see below). |
+| `AUTH_SERVICE_URL` | *(Optional)* Base URL of the [Authentication service](https://github.com/Oghamark/Authentication) (e.g. `http://auth:3001`). Required to enable OPDS Basic Auth — OPDS clients (e.g. KOReader) send an email and password which Homebranch forwards to this service to obtain a JWT. Without this variable the OPDS catalog is still served but Basic Auth attempts will return `401`. |
 
 ### Google Books API key (runtime)
 

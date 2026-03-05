@@ -234,10 +234,7 @@ export class TypeOrmBookRepository implements IBookRepository {
     });
   }
 
-  private applySearchFilters(
-    qb: ReturnType<typeof this.repository.createQueryBuilder>,
-    filters: BookSearchFilters,
-  ) {
+  private applySearchFilters(qb: ReturnType<typeof this.repository.createQueryBuilder>, filters: BookSearchFilters) {
     if (filters.query) {
       qb.andWhere('LOWER(book.title) LIKE LOWER(:query)', { query: `%${filters.query}%` });
     }
@@ -314,5 +311,20 @@ export class TypeOrmBookRepository implements IBookRepository {
       order: { title: 'ASC' },
     });
     return Result.ok(BookMapper.toDomainList(bookEntities));
+  }
+
+  async findNewArrivals(limit?: number, offset?: number): Promise<Result<PaginationResult<Book[]>>> {
+    const [bookEntities, total] = await this.repository.findAndCount({
+      order: { createdAt: 'DESC' },
+      take: limit,
+      skip: offset,
+    });
+    return Result.ok({
+      data: BookMapper.toDomainList(bookEntities),
+      limit,
+      offset,
+      total,
+      nextCursor: limit && total > (offset || 0) + limit ? (offset || 0) + limit : null,
+    });
   }
 }

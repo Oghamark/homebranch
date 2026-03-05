@@ -30,6 +30,7 @@ export const mockBookEntity: BookEntity = {
   averageRating: mockBook.averageRating,
   ratingsCount: mockBook.ratingsCount,
   metadataFetchedAt: mockBook.metadataFetchedAt,
+  createdAt: new Date('2024-01-01'),
 };
 
 export const mockBookShelfEntity: BookShelfEntity = {

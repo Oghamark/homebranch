@@ -55,4 +55,5 @@ export interface IBookRepository extends IRepository<Book> {
     userId?: string,
   ): Promise<Result<PaginationResult<Book[]>>>;
   findBooksWithoutMetadata(limit: number): Promise<Result<Book[]>>;
+  findNewArrivals(limit?: number, offset?: number): Promise<Result<PaginationResult<Book[]>>>;
 }

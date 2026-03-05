@@ -19,5 +19,6 @@ export class Book {
     public averageRating?: number,
     public ratingsCount?: number,
     public metadataFetchedAt?: Date,
+    public createdAt?: Date,
   ) {}
 }

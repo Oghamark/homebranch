@@ -8,6 +8,7 @@ import { SavedPositionsModule } from './modules/saved-position.module';
 import { HealthModule } from './modules/health.module';
 import { AuthorsModule } from './modules/author.module';
 import { SettingsModule } from './modules/settings.module';
+import { OpdsModule } from './modules/opds.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { SettingsModule } from './modules/settings.module';
     SavedPositionsModule,
     AuthorsModule,
     SettingsModule,
+    OpdsModule,
   ],
   controllers: [],
   providers: [],

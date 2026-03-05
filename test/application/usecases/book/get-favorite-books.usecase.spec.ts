@@ -82,7 +82,12 @@ describe('GetFavoriteBooksUseCase', () => {
     });
 
     expect(bookRepository.searchFavoritesWithFilters).toHaveBeenCalledTimes(1);
-    expect(bookRepository.searchFavoritesWithFilters).toHaveBeenCalledWith({ query: 'Test Book', isbn: undefined, genre: undefined, series: undefined, author: undefined }, 10, 0, 'user-123');
+    expect(bookRepository.searchFavoritesWithFilters).toHaveBeenCalledWith(
+      { query: 'Test Book', isbn: undefined, genre: undefined, series: undefined, author: undefined },
+      10,
+      0,
+      'user-123',
+    );
     expect(bookRepository.findFavorites).not.toHaveBeenCalled();
     expect(result.isSuccess()).toBe(true);
     expect(result.value).toEqual(paginationResult);

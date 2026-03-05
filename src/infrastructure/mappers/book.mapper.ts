@@ -24,6 +24,7 @@ export class BookMapper {
       bookEntity.averageRating,
       bookEntity.ratingsCount,
       bookEntity.metadataFetchedAt,
+      bookEntity.createdAt,
     );
   }
 
@@ -48,6 +49,7 @@ export class BookMapper {
       averageRating: book.averageRating,
       ratingsCount: book.ratingsCount,
       metadataFetchedAt: book.metadataFetchedAt,
+      createdAt: book.createdAt ?? new Date(),
     };
   }
 

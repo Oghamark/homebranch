@@ -10,10 +10,24 @@ import { GetBooksRequest } from 'src/application/contracts/book/get-books-reques
 export class GetFavoriteBooksUseCase implements UseCase<GetBooksRequest, PaginationResult<Book[]>> {
   constructor(@Inject('BookRepository') private bookRepository: IBookRepository) {}
 
-  async execute({ query, limit, offset, userId, isbn, genre, series, author }: GetBooksRequest): Promise<Result<PaginationResult<Book[]>>> {
+  async execute({
+    query,
+    limit,
+    offset,
+    userId,
+    isbn,
+    genre,
+    series,
+    author,
+  }: GetBooksRequest): Promise<Result<PaginationResult<Book[]>>> {
     const hasFilters = query || isbn || genre || series || author;
     if (hasFilters) {
-      return await this.bookRepository.searchFavoritesWithFilters({ query, isbn, genre, series, author }, limit, offset, userId);
+      return await this.bookRepository.searchFavoritesWithFilters(
+        { query, isbn, genre, series, author },
+        limit,
+        offset,
+        userId,
+      );
     }
     return await this.bookRepository.findFavorites(limit, offset, userId);
   }

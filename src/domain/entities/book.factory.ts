@@ -21,6 +21,7 @@ export class BookFactory {
     averageRating?: number,
     ratingsCount?: number,
     metadataFetchedAt?: Date,
+    createdAt?: Date,
   ): Book {
     if (!title || !author) {
       throw new Error('Title and author are required to create a book.');
@@ -46,6 +47,7 @@ export class BookFactory {
       averageRating,
       ratingsCount,
       metadataFetchedAt,
+      createdAt,
     );
   }
 
@@ -70,6 +72,7 @@ export class BookFactory {
       overrides.averageRating ?? book.averageRating,
       overrides.ratingsCount ?? book.ratingsCount,
       overrides.metadataFetchedAt ?? book.metadataFetchedAt,
+      overrides.createdAt ?? book.createdAt,
     );
   }
 }
