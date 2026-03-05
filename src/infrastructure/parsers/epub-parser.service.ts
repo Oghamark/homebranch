@@ -2,13 +2,30 @@ import { Injectable, Logger } from '@nestjs/common';
 import EPub from 'epub2';
 import { IEpubMetadata, IEpubParser } from 'src/application/interfaces/epub-parser';
 
+interface EpubMetadata {
+  title?: string;
+  creator?: string;
+  language?: string;
+  publisher?: string;
+  date?: string;
+  ISBN?: string;
+  description?: string;
+  subject?: string[];
+  cover?: string;
+  'belongs-to-collection'?: string;
+  'calibre:series'?: string;
+  'group-position'?: string | number;
+  'calibre:series_index'?: string | number;
+  [key: string]: unknown;
+}
+
 @Injectable()
 export class EpubParserService implements IEpubParser {
   private readonly logger = new Logger(EpubParserService.name);
 
   async parse(filePath: string): Promise<IEpubMetadata> {
     const epub = await EPub.createAsync(filePath);
-    const meta = epub.metadata;
+    const meta = epub.metadata as unknown as EpubMetadata;
     const result: IEpubMetadata = {};
 
     if (meta.title) result.title = meta.title.trim();
@@ -54,19 +71,21 @@ export class EpubParserService implements IEpubParser {
   private async extractCover(epub: EPub): Promise<{ data: Buffer; mimeType: string } | null> {
     try {
       // EPUB2: metadata.cover holds the manifest item ID of the cover image
-      const coverId = epub.metadata.cover;
+      const meta = epub.metadata as unknown as EpubMetadata;
+      const coverId = meta.cover;
       if (coverId && typeof coverId === 'string') {
         const [data, mimeType] = await epub.getImageAsync(coverId);
-        if (data) return { data, mimeType };
+        if (data) return { data, mimeType: mimeType as string };
       }
 
       // Fallback: find first manifest item with "cover" in its ID that is an image
-      const coverItem = Object.values(epub.manifest).find(
+      const manifest = epub.manifest as Record<string, { id?: string; 'media-type'?: string }>;
+      const coverItem = Object.values(manifest).find(
         (item) => item.id?.toLowerCase().includes('cover') && item['media-type']?.startsWith('image/'),
       );
       if (coverItem?.id) {
         const [data, mimeType] = await epub.getImageAsync(coverItem.id);
-        if (data) return { data, mimeType };
+        if (data) return { data, mimeType: mimeType as string };
       }
     } catch (err) {
       this.logger.warn(`Could not extract cover image from EPUB: ${String(err)}`);
