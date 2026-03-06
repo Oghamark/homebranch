@@ -3,7 +3,8 @@
 Homebranch is a self-hosted web application for managing and reading your E-Book collection.
 It provides a user-friendly interface to organize, search, and read your ebooks across devices.
 
-> The project is split into 3 repositories allowing you to choose the components you want to use:
+> [!NOTE]
+>  The project is split into 3 repositories allowing you to choose the components you want to use:
 > - [Homebranch Web](https://github.com/Oghamark/homebranch-web): The frontend web application built with React and TypeScript
 > - [Homebranch](https://github.com/Oghamark/homebranch): The backend API built with NestJS and TypeScript
 > - [Authentication](https://github.com/Oghamark/Authentication): A standalone authentication service built with NestJS and TypeScript, which can be used with Homebranch or as a general-purpose auth service for other applications
