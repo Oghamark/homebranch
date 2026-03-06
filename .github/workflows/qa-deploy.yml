@@ -20,7 +20,7 @@ jobs:
       - name: Determine version
         id: version
         run: |
-          VERSION="qa-${GITHUB_SHA::8}"
+          VERSION="0.0.0-qa-${GITHUB_SHA::8}"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-node@v4
         with:
