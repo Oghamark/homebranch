@@ -10,10 +10,21 @@ export class BookMapper {
       bookEntity.author,
       bookEntity.fileName,
       bookEntity.isFavorite,
+      bookEntity.genres,
       bookEntity.publishedYear,
       bookEntity.coverImageFileName,
       bookEntity.summary,
       bookEntity.uploadedByUserId,
+      bookEntity.series,
+      bookEntity.seriesPosition,
+      bookEntity.isbn,
+      bookEntity.pageCount,
+      bookEntity.publisher,
+      bookEntity.language,
+      bookEntity.averageRating,
+      bookEntity.ratingsCount,
+      bookEntity.metadataFetchedAt,
+      bookEntity.createdAt,
     );
   }
 
@@ -28,6 +39,17 @@ export class BookMapper {
       coverImageFileName: book.coverImageFileName,
       summary: book.summary,
       uploadedByUserId: book.uploadedByUserId,
+      genres: book.genres,
+      series: book.series,
+      seriesPosition: book.seriesPosition,
+      isbn: book.isbn,
+      pageCount: book.pageCount,
+      publisher: book.publisher,
+      language: book.language,
+      averageRating: book.averageRating,
+      ratingsCount: book.ratingsCount,
+      metadataFetchedAt: book.metadataFetchedAt,
+      createdAt: book.createdAt ?? new Date(),
     };
   }
 

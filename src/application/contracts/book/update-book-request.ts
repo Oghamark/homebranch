@@ -13,6 +13,9 @@ export class UpdateBookRequest {
   author?: string;
 
   @IsOptional()
+  genres?: string[];
+
+  @IsOptional()
   @IsNumber()
   publishedYear?: number;
 
@@ -22,4 +25,36 @@ export class UpdateBookRequest {
   @IsOptional()
   @IsString()
   summary?: string;
+
+  @IsOptional()
+  @IsString()
+  series?: string;
+
+  @IsOptional()
+  @IsNumber()
+  seriesPosition?: number;
+
+  @IsOptional()
+  @IsString()
+  isbn?: string;
+
+  @IsOptional()
+  @IsNumber()
+  pageCount?: number;
+
+  @IsOptional()
+  @IsString()
+  publisher?: string;
+
+  @IsOptional()
+  @IsString()
+  language?: string;
+
+  @IsOptional()
+  @IsNumber()
+  averageRating?: number;
+
+  @IsOptional()
+  @IsNumber()
+  ratingsCount?: number;
 }

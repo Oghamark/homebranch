@@ -16,6 +16,8 @@ import { AddSummaryToBook1755566512421 } from '../migrations/1755566512421-AddSu
 import { RemoveUserAndRoleTables1760000000000 } from '../migrations/1760000000000-RemoveUserAndRoleTables';
 import { AddUploadedByUserIdToBook1767225600000 } from '../migrations/1767225600000-AddUploadedByUserIdToBook';
 import { AddCreatedByUserIdToBookShelf1772317868306 } from '../migrations/1772317868306-AddCreatedByUserIdToBookShelf';
+import { AddBookMetadataFields1772395519432 } from '../migrations/1772395519432-AddBookMetadataFields';
+import { AddCreatedAtToBook1772681032915 } from 'src/migrations/1772681032915-AddCreatedAtToBook';
 
 @Module({
   imports: [
@@ -57,6 +59,8 @@ import { AddCreatedByUserIdToBookShelf1772317868306 } from '../migrations/177231
             RemoveUserAndRoleTables1760000000000,
             AddUploadedByUserIdToBook1767225600000,
             AddCreatedByUserIdToBookShelf1772317868306,
+            AddBookMetadataFields1772395519432,
+            AddCreatedAtToBook1772681032915,
           ],
           migrationsRun: true,
           migrationsTableName: 'migration_table',

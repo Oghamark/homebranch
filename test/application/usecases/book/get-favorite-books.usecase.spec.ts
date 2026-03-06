@@ -39,6 +39,7 @@ describe('GetFavoriteBooksUseCase', () => {
       'Another Author',
       'another.epub',
       true,
+      [],
       2023,
       'another-cover.jpg',
     );
@@ -71,7 +72,7 @@ describe('GetFavoriteBooksUseCase', () => {
       total: 1,
       nextCursor: null,
     };
-    bookRepository.searchFavoritesByTitle.mockResolvedValueOnce(Result.ok(paginationResult));
+    bookRepository.searchFavoritesWithFilters.mockResolvedValueOnce(Result.ok(paginationResult));
 
     const result = await useCase.execute({
       limit: 10,
@@ -80,8 +81,13 @@ describe('GetFavoriteBooksUseCase', () => {
       userId: 'user-123',
     });
 
-    expect(bookRepository.searchFavoritesByTitle).toHaveBeenCalledTimes(1);
-    expect(bookRepository.searchFavoritesByTitle).toHaveBeenCalledWith('Test Book', 10, 0, 'user-123');
+    expect(bookRepository.searchFavoritesWithFilters).toHaveBeenCalledTimes(1);
+    expect(bookRepository.searchFavoritesWithFilters).toHaveBeenCalledWith(
+      { query: 'Test Book', isbn: undefined, genre: undefined, series: undefined, author: undefined },
+      10,
+      0,
+      'user-123',
+    );
     expect(bookRepository.findFavorites).not.toHaveBeenCalled();
     expect(result.isSuccess()).toBe(true);
     expect(result.value).toEqual(paginationResult);

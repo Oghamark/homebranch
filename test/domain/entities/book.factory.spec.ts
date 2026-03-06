@@ -3,7 +3,7 @@ import { BookFactory } from 'src/domain/entities/book.factory';
 describe('BookFactory', () => {
   describe('create', () => {
     test('Successfully creates a book with all fields', () => {
-      const book = BookFactory.create('book-1', 'Test Book', 'Test Author', 'test.epub', false, 2023, 'cover.jpg');
+      const book = BookFactory.create('book-1', 'Test Book', 'Test Author', 'test.epub', false, [], 2023, 'cover.jpg');
 
       expect(book.id).toBe('book-1');
       expect(book.title).toBe('Test Book');
@@ -63,13 +63,13 @@ describe('BookFactory', () => {
     });
 
     test('Handles optional published year', () => {
-      const book = BookFactory.create('book-9', 'Title', 'Author', 'test.epub', false, 2020);
+      const book = BookFactory.create('book-9', 'Title', 'Author', 'test.epub', false, [], 2020);
 
       expect(book.publishedYear).toBe(2020);
     });
 
     test('Handles optional cover image filename', () => {
-      const book = BookFactory.create('book-10', 'Title', 'Author', 'test.epub', false, undefined, 'mycover.png');
+      const book = BookFactory.create('book-10', 'Title', 'Author', 'test.epub', false, [], undefined, 'mycover.png');
 
       expect(book.coverImageFileName).toBe('mycover.png');
     });

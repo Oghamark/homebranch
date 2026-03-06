@@ -4,6 +4,14 @@ import { PaginationResult } from 'src/core/pagination_result';
 import { IRepository } from 'src/core/repository';
 import { BookShelf } from 'src/domain/entities/bookshelf.entity';
 
+export interface BookSearchFilters {
+  query?: string;
+  isbn?: string;
+  genre?: string;
+  series?: string;
+  author?: string;
+}
+
 export interface IBookRepository extends IRepository<Book> {
   findAll(limit?: number, offset?: number, userId?: string): Promise<Result<PaginationResult<Book[]>>>;
   findByAuthor(
@@ -34,4 +42,18 @@ export interface IBookRepository extends IRepository<Book> {
     offset?: number,
     userId?: string,
   ): Promise<Result<PaginationResult<Book[]>>>;
+  searchWithFilters(
+    filters: BookSearchFilters,
+    limit?: number,
+    offset?: number,
+    userId?: string,
+  ): Promise<Result<PaginationResult<Book[]>>>;
+  searchFavoritesWithFilters(
+    filters: BookSearchFilters,
+    limit?: number,
+    offset?: number,
+    userId?: string,
+  ): Promise<Result<PaginationResult<Book[]>>>;
+  findBooksWithoutMetadata(limit: number): Promise<Result<Book[]>>;
+  findNewArrivals(limit?: number, offset?: number): Promise<Result<PaginationResult<Book[]>>>;
 }

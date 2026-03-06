@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { IBookRepository } from 'src/application/interfaces/book-repository';
-import { Repository } from 'typeorm';
+import { IBookRepository, BookSearchFilters } from 'src/application/interfaces/book-repository';
+import { IsNull, Repository } from 'typeorm';
 import { BookEntity } from 'src/infrastructure/database/book.entity';
 import { BookMapper } from '../mappers/book.mapper';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -231,6 +231,100 @@ export class TypeOrmBookRepository implements IBookRepository {
       offset: offset,
       total: total,
       nextCursor: limit && total > (offset || 0) + (limit || 0) ? (offset || 0) + (limit || 0) : null,
+    });
+  }
+
+  private applySearchFilters(qb: ReturnType<typeof this.repository.createQueryBuilder>, filters: BookSearchFilters) {
+    if (filters.query) {
+      qb.andWhere('LOWER(book.title) LIKE LOWER(:query)', { query: `%${filters.query}%` });
+    }
+    if (filters.isbn) {
+      qb.andWhere('book.isbn = :isbn', { isbn: filters.isbn });
+    }
+    if (filters.genre) {
+      qb.andWhere('LOWER(book.genres) LIKE LOWER(:genre)', { genre: `%${filters.genre}%` });
+    }
+    if (filters.series) {
+      qb.andWhere('LOWER(book.series) LIKE LOWER(:series)', { series: `%${filters.series}%` });
+    }
+    if (filters.author) {
+      qb.andWhere('LOWER(book.author) LIKE LOWER(:author)', { author: `%${filters.author}%` });
+    }
+  }
+
+  async searchWithFilters(
+    filters: BookSearchFilters,
+    limit?: number,
+    offset?: number,
+    userId?: string,
+  ): Promise<Result<PaginationResult<Book[]>>> {
+    const qb = this.repository.createQueryBuilder('book');
+    this.applySearchFilters(qb, filters);
+    if (userId) {
+      qb.andWhere('book.uploadedByUserId = :userId', { userId });
+    }
+    const [bookEntities, total] = await qb
+      .orderBy('book.author', 'ASC')
+      .addOrderBy('book.title', 'ASC')
+      .limit(limit)
+      .skip(offset)
+      .getManyAndCount();
+    return Result.ok({
+      data: BookMapper.toDomainList(bookEntities),
+      limit,
+      offset,
+      total,
+      nextCursor: limit && total > (offset || 0) + limit ? (offset || 0) + limit : null,
+    });
+  }
+
+  async searchFavoritesWithFilters(
+    filters: BookSearchFilters,
+    limit?: number,
+    offset?: number,
+    userId?: string,
+  ): Promise<Result<PaginationResult<Book[]>>> {
+    const qb = this.repository.createQueryBuilder('book').where('book.isFavorite = true');
+    this.applySearchFilters(qb, filters);
+    if (userId) {
+      qb.andWhere('book.uploadedByUserId = :userId', { userId });
+    }
+    const [bookEntities, total] = await qb
+      .orderBy('book.author', 'ASC')
+      .addOrderBy('book.title', 'ASC')
+      .limit(limit)
+      .skip(offset)
+      .getManyAndCount();
+    return Result.ok({
+      data: BookMapper.toDomainList(bookEntities),
+      limit,
+      offset,
+      total,
+      nextCursor: limit && total > (offset || 0) + limit ? (offset || 0) + limit : null,
+    });
+  }
+
+  async findBooksWithoutMetadata(limit: number): Promise<Result<Book[]>> {
+    const bookEntities = await this.repository.find({
+      where: { metadataFetchedAt: IsNull() },
+      take: limit,
+      order: { title: 'ASC' },
+    });
+    return Result.ok(BookMapper.toDomainList(bookEntities));
+  }
+
+  async findNewArrivals(limit?: number, offset?: number): Promise<Result<PaginationResult<Book[]>>> {
+    const [bookEntities, total] = await this.repository.findAndCount({
+      order: { createdAt: 'DESC' },
+      take: limit,
+      skip: offset,
+    });
+    return Result.ok({
+      data: BookMapper.toDomainList(bookEntities),
+      limit,
+      offset,
+      total,
+      nextCursor: limit && total > (offset || 0) + limit ? (offset || 0) + limit : null,
     });
   }
 }

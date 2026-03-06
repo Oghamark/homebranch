@@ -1,16 +1,18 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { IBookRepository } from 'src/application/interfaces/book-repository';
 import { CreateBookUseCase } from 'src/application/usecases/book/create-book.usecase';
+import { IMetadataGateway } from 'src/application/interfaces/metadata-gateway';
+import { IEpubParser } from 'src/application/interfaces/epub-parser';
 import { mock } from 'jest-mock-extended';
 import { mockBook } from 'test/mocks/bookMocks';
 import { Result, UnexpectedFailure } from 'src/core/result';
-import { OpenLibraryGateway } from 'src/infrastructure/gateways/open-library.gateway';
 import Mocked = jest.Mocked;
 
 describe('CreateBookUseCase', () => {
   let useCase: CreateBookUseCase;
   let bookRepository: Mocked<IBookRepository>;
-  let openLibraryGateway: Mocked<OpenLibraryGateway>;
+  let metadataGateway: Mocked<IMetadataGateway>;
+  let epubParser: Mocked<IEpubParser>;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -21,15 +23,22 @@ describe('CreateBookUseCase', () => {
           useValue: mock<IBookRepository>(),
         },
         {
-          provide: OpenLibraryGateway,
-          useValue: mock<OpenLibraryGateway>(),
+          provide: 'MetadataGateway',
+          useValue: mock<IMetadataGateway>(),
+        },
+        {
+          provide: 'EpubParser',
+          useValue: mock<IEpubParser>(),
         },
       ],
     }).compile();
 
     useCase = module.get<CreateBookUseCase>(CreateBookUseCase);
     bookRepository = module.get('BookRepository');
-    openLibraryGateway = module.get(OpenLibraryGateway);
+    metadataGateway = module.get('MetadataGateway');
+    epubParser = module.get('EpubParser');
+    metadataGateway.enrichBook.mockResolvedValue(mockBook);
+    epubParser.parse.mockResolvedValue({});
   });
 
   afterEach(() => {
@@ -37,7 +46,6 @@ describe('CreateBookUseCase', () => {
   });
 
   test('Successfully creates a book', async () => {
-    openLibraryGateway.findBookSummary.mockResolvedValueOnce(null);
     bookRepository.create.mockResolvedValueOnce(Result.ok(mockBook));
 
     const result = await useCase.execute({
@@ -62,7 +70,6 @@ describe('CreateBookUseCase', () => {
   });
 
   test('Successfully creates a book with minimal fields', async () => {
-    openLibraryGateway.findBookSummary.mockResolvedValueOnce(null);
     bookRepository.create.mockResolvedValueOnce(Result.ok(mockBook));
 
     const result = await useCase.execute({
@@ -82,7 +89,6 @@ describe('CreateBookUseCase', () => {
   });
 
   test('Ignores invalid published year', async () => {
-    openLibraryGateway.findBookSummary.mockResolvedValueOnce(null);
     bookRepository.create.mockResolvedValueOnce(Result.ok(mockBook));
 
     const result = await useCase.execute({
@@ -100,7 +106,6 @@ describe('CreateBookUseCase', () => {
   });
 
   test('Successfully parses valid published year', async () => {
-    openLibraryGateway.findBookSummary.mockResolvedValueOnce(null);
     bookRepository.create.mockResolvedValueOnce(Result.ok(mockBook));
 
     const result = await useCase.execute({
@@ -118,7 +123,6 @@ describe('CreateBookUseCase', () => {
   });
 
   test('Successfully handles isFavorite flag', async () => {
-    openLibraryGateway.findBookSummary.mockResolvedValueOnce(null);
     bookRepository.create.mockResolvedValueOnce(Result.ok(mockBook));
 
     const result = await useCase.execute({
@@ -135,43 +139,25 @@ describe('CreateBookUseCase', () => {
     expect(calledWith.isFavorite).toBe(true);
   });
 
-  test('Sets summary from Open Library when available', async () => {
-    openLibraryGateway.findBookSummary.mockResolvedValueOnce('A summary from Open Library.');
+  test('Initiates background metadata enrichment after successful create', async () => {
     bookRepository.create.mockResolvedValueOnce(Result.ok(mockBook));
+    bookRepository.update.mockResolvedValueOnce(Result.ok(mockBook));
 
-    const result = await useCase.execute({
+    await useCase.execute({
       title: 'Test Book',
       author: 'Test Author',
       fileName: 'test-book.epub',
       uploadedByUserId: 'user-123',
     });
 
-    expect(result.isSuccess()).toBe(true);
-    expect(openLibraryGateway.findBookSummary).toHaveBeenCalledWith('Test Book', 'Test Author');
+    // Allow fire-and-forget promise to resolve
+    await new Promise((resolve) => setImmediate(resolve));
 
-    const calledWith = bookRepository.create.mock.calls[0][0];
-    expect(calledWith.summary).toBe('A summary from Open Library.');
-  });
-
-  test('Creates book without summary when Open Library returns null', async () => {
-    openLibraryGateway.findBookSummary.mockResolvedValueOnce(null);
-    bookRepository.create.mockResolvedValueOnce(Result.ok(mockBook));
-
-    const result = await useCase.execute({
-      title: 'Test Book',
-      author: 'Test Author',
-      fileName: 'test-book.epub',
-      uploadedByUserId: 'user-123',
-    });
-
-    expect(result.isSuccess()).toBe(true);
-
-    const calledWith = bookRepository.create.mock.calls[0][0];
-    expect(calledWith.summary).toBeUndefined();
+    expect(metadataGateway.enrichBook).toHaveBeenCalledWith(expect.objectContaining({ title: 'Test Book' }));
+    expect(bookRepository.update).toHaveBeenCalledTimes(1);
   });
 
   test('Fails when repository create fails', async () => {
-    openLibraryGateway.findBookSummary.mockResolvedValueOnce(null);
     const error = new UnexpectedFailure('Database error');
     bookRepository.create.mockResolvedValueOnce(Result.fail(error));
 
@@ -184,5 +170,138 @@ describe('CreateBookUseCase', () => {
 
     expect(result.isFailure()).toBe(true);
     expect(bookRepository.create).toHaveBeenCalledTimes(1);
+  });
+
+  describe('EPUB metadata merge', () => {
+    test('Fills blank fields from epub metadata', async () => {
+      bookRepository.create.mockResolvedValueOnce(Result.ok(mockBook));
+      epubParser.parse.mockResolvedValueOnce({
+        language: 'fr',
+        publisher: 'EPUB Publisher',
+        publishedYear: 2020,
+        isbn: '978-3-16-148410-0',
+        summary: 'An epub summary.',
+        genres: ['Fiction'],
+        series: 'My Series',
+        seriesPosition: 2,
+      });
+
+      await useCase.execute({
+        title: 'Test Book',
+        author: 'Test Author',
+        fileName: 'test-book.epub',
+        uploadedByUserId: 'user-123',
+      });
+
+      const calledWith = bookRepository.create.mock.calls[0][0];
+      expect(calledWith.language).toBe('fr');
+      expect(calledWith.publisher).toBe('EPUB Publisher');
+      expect(calledWith.publishedYear).toBe(2020);
+      expect(calledWith.isbn).toBe('978-3-16-148410-0');
+      expect(calledWith.summary).toBe('An epub summary.');
+      expect(calledWith.genres).toEqual(['Fiction']);
+      expect(calledWith.series).toBe('My Series');
+      expect(calledWith.seriesPosition).toBe(2);
+    });
+
+    test('User-provided fields take priority over epub metadata', async () => {
+      bookRepository.create.mockResolvedValueOnce(Result.ok(mockBook));
+      epubParser.parse.mockResolvedValueOnce({
+        language: 'fr',
+        publisher: 'EPUB Publisher',
+        publishedYear: 1900,
+        isbn: 'epub-isbn',
+        genres: ['EPUB Genre'],
+        series: 'EPUB Series',
+        seriesPosition: 99,
+      });
+
+      await useCase.execute({
+        title: 'Test Book',
+        author: 'Test Author',
+        fileName: 'test-book.epub',
+        uploadedByUserId: 'user-123',
+        language: 'en',
+        publisher: 'User Publisher',
+        publishedYear: '2024',
+        isbn: 'user-isbn',
+        genres: ['User Genre'],
+        series: 'User Series',
+        seriesPosition: 1,
+      });
+
+      const calledWith = bookRepository.create.mock.calls[0][0];
+      expect(calledWith.language).toBe('en');
+      expect(calledWith.publisher).toBe('User Publisher');
+      expect(calledWith.publishedYear).toBe(2024);
+      expect(calledWith.isbn).toBe('user-isbn');
+      expect(calledWith.genres).toEqual(['User Genre']);
+      expect(calledWith.series).toBe('User Series');
+      expect(calledWith.seriesPosition).toBe(1);
+    });
+
+    test('Continues successfully when epub parser throws', async () => {
+      bookRepository.create.mockResolvedValueOnce(Result.ok(mockBook));
+      epubParser.parse.mockRejectedValueOnce(new Error('corrupt epub'));
+
+      const result = await useCase.execute({
+        title: 'Test Book',
+        author: 'Test Author',
+        fileName: 'test-book.epub',
+        uploadedByUserId: 'user-123',
+      });
+
+      expect(result.isSuccess()).toBe(true);
+      expect(bookRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'Test Book', author: 'Test Author' }),
+      );
+    });
+
+    test('Fails with MISSING_METADATA when title cannot be determined', async () => {
+      epubParser.parse.mockResolvedValueOnce({ author: 'Some Author' });
+
+      const result = await useCase.execute({
+        title: '' as unknown as string,
+        author: 'Test Author',
+        fileName: 'test-book.epub',
+        uploadedByUserId: 'user-123',
+      });
+
+      expect(result.isFailure()).toBe(true);
+      expect(result.failure?.code).toBe('MISSING_METADATA');
+      expect(bookRepository.create).not.toHaveBeenCalled();
+    });
+
+    test('Fails with MISSING_METADATA when author cannot be determined', async () => {
+      epubParser.parse.mockResolvedValueOnce({ title: 'Some Title' });
+
+      const result = await useCase.execute({
+        title: 'Test Book',
+        author: '' as unknown as string,
+        fileName: 'test-book.epub',
+        uploadedByUserId: 'user-123',
+      });
+
+      expect(result.isFailure()).toBe(true);
+      expect(result.failure?.code).toBe('MISSING_METADATA');
+      expect(bookRepository.create).not.toHaveBeenCalled();
+    });
+
+    test('Uses epub title/author when dto fields are absent', async () => {
+      bookRepository.create.mockResolvedValueOnce(Result.ok(mockBook));
+      epubParser.parse.mockResolvedValueOnce({ title: 'EPUB Title', author: 'EPUB Author' });
+
+      const result = await useCase.execute({
+        title: '' as unknown as string,
+        author: '' as unknown as string,
+        fileName: 'test-book.epub',
+        uploadedByUserId: 'user-123',
+      });
+
+      expect(result.isSuccess()).toBe(true);
+      expect(bookRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'EPUB Title', author: 'EPUB Author' }),
+      );
+    });
   });
 });

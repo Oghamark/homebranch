@@ -1,0 +1,132 @@
+name: QA Deploy
+
+on:
+  push:
+    branches: [dev]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  NODE_VERSION: '20'
+
+jobs:
+  build:
+    name: Build, Lint & Test
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Determine version
+        id: version
+        run: |
+          VERSION="0.0.0-qa-${GITHUB_SHA::8}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Lint
+        run: npx eslint "{src,apps,libs,test}/**/*.ts"
+      - name: Unit tests
+        run: npm test
+      - name: Build
+        run: npm run build
+      - name: Install production dependencies
+        run: |
+          rm -rf node_modules
+          npm ci --omit=dev
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-build
+          path: |
+            dist/
+            node_modules/
+            package.json
+            src/data-source.ts
+            src/migrations/
+          retention-days: 1
+
+  deb:
+    name: Debian package
+    needs: build
+    runs-on: ubuntu-latest
+    outputs:
+      deb_name: ${{ steps.pkg.outputs.deb_name }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-build
+          path: build/
+      - name: Download Node.js binary
+        run: |
+          mkdir -p node-bundle
+          NODE_FULL="$(curl -s https://nodejs.org/dist/latest-v${{ env.NODE_VERSION }}.x/SHASUMS256.txt | head -1 | grep -oP 'node-v[\d.]+'| sed 's/node-//')"
+          echo "Bundling Node.js ${NODE_FULL}"
+          curl -fsSL "https://nodejs.org/dist/${NODE_FULL}/node-${NODE_FULL}-linux-x64.tar.xz" | tar -xJ --strip-components=1 -C node-bundle
+      - name: Build .deb
+        id: pkg
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          PKG="homebranch"
+          DEB="${PKG}_${VERSION}_amd64.deb"
+          install -d pkg/DEBIAN
+          install -d pkg/opt/homebranch/dist
+          install -d pkg/opt/homebranch/node_modules
+          install -d pkg/opt/homebranch/node
+          install -d pkg/opt/homebranch/src/migrations
+          install -d pkg/etc/default
+          install -d pkg/etc/systemd/system
+          cp -r build/dist/. pkg/opt/homebranch/dist/
+          cp -r build/node_modules/. pkg/opt/homebranch/node_modules/
+          cp build/package.json pkg/opt/homebranch/package.json
+          cp build/src/data-source.ts pkg/opt/homebranch/src/data-source.ts
+          cp -r build/src/migrations/. pkg/opt/homebranch/src/migrations/
+          cp node-bundle/bin/node pkg/opt/homebranch/node/
+          cp -r node-bundle/lib pkg/opt/homebranch/node/
+          cp packaging/deb/homebranch.env pkg/etc/default/homebranch
+          cp packaging/deb/homebranch.service pkg/etc/systemd/system/homebranch.service
+          printf 'Package: %s\nVersion: %s\nArchitecture: amd64\nMaintainer: %s <%s@users.noreply.github.com>\nDescription: HomeBranch — self-hosted eBook management backend\n NestJS API server for managing books, bookshelves, and user\n accounts. Bundles its own Node.js runtime. Runs as a systemd\n service reading config from /etc/default/homebranch.\n' "$PKG" "$VERSION" "$GITHUB_REPOSITORY_OWNER" "$GITHUB_REPOSITORY_OWNER" > pkg/DEBIAN/control
+          echo '/etc/default/homebranch' > pkg/DEBIAN/conffiles
+          install -m 755 packaging/deb/postinst pkg/DEBIAN/postinst
+          dpkg-deb --build --root-owner-group pkg "$DEB"
+          echo "deb_name=$DEB" >> "$GITHUB_OUTPUT"
+      - name: Upload .deb artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: deb-package
+          path: "*.deb"
+          retention-days: 7
+
+  deploy:
+    name: Deploy to Proxmox (QA)
+    needs: deb
+    runs-on: self-hosted
+    environment: qa
+    if: github.ref == 'refs/heads/dev' && github.event_name == 'push'
+    steps:
+      - name: Download .deb artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: deb-package
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.BACKEND_HOST }}" >> ~/.ssh/known_hosts
+      - name: Copy .deb to server
+        run: |
+          scp -i ~/.ssh/deploy_key "${{ needs.deb.outputs.deb_name }}" ${{ secrets.BACKEND_USER }}@${{ secrets.BACKEND_HOST }}:/tmp/homebranch-qa.deb
+      - name: Install
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ secrets.BACKEND_USER }}@${{ secrets.BACKEND_HOST }} "sudo dpkg -i --force-confold /tmp/homebranch-qa.deb; status=\$?; rm -f /tmp/homebranch-qa.deb; exit \$status"
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key

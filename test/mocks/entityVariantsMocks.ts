@@ -16,11 +16,12 @@ export const mockBookFavorite: Book = new Book(
   'Famous Author',
   'favorite-book.epub',
   true,
+  [],
   2023,
   'favorite-cover.jpg',
 );
 
-export const mockBookMinimal: Book = new Book('book-min', 'Minimal Book', 'Test Author', 'minimal.epub', false);
+export const mockBookMinimal: Book = new Book('book-min', 'Minimal Book', 'Test Author', 'minimal.epub', false, []);
 
 export const mockBooks: Book[] = [mockBook, mockBookFavorite, mockBookMinimal];
 
