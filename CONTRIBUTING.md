@@ -1,31 +1,44 @@
-# Contributing Guidelines
+# How to contribute
 
-Thank you for your interest in contributing to Homebranch!
+We welcome contributions to the project!
 
-## How to Contribute
+If you have an idea for a new feature, or have found a bug, please open an issue to discuss it.
 
-1. **Fork the repository** and clone your fork locally.
-2. **Create a new branch** from `dev` for your feature or fix.
-3. **Follow Clean Architecture** conventions (see README for details).
-4. **Write tests** for new features and bug fixes. Place unit tests in `test/` mirroring the source structure.
-5. **Run lint and tests** before submitting:
-   - `npm run lint`
-   - `npm test`
-6. **Open a pull request** against the `dev` branch. Include a clear description of your changes.
-7. **Respond to review feedback** promptly.
+## Development
 
-## Code Style
-- Use Prettier and ESLint (`npm run format` and `npm run lint`).
-- Use string tokens for DI (see README).
-- Do not throw for business logic errors—use the `Result` type.
+To set up a development environment, follow these steps:
 
-## Commit Messages
-- Use concise, descriptive commit messages.
-- Reference related issues when applicable.
 
-## Reporting Issues
-- Use GitHub Issues for bugs and feature requests.
-- Provide steps to reproduce, expected behavior, and relevant logs/code.
+> You will need to have the frontend and an authentication service running locally to test your changes.
+> Please refer to the [frontend repository](https://github.com/Oghamark/homebranch-web) and the [auth repository]
+> (https://github.com/Oghamark/Authentication)
+> or our [documentation](https://homebranch.app/docs/getting-started/) for instructions on how to set up the backend.
 
-## Contact
-For questions, open an issue or discussion on GitHub.
+1. [Fork](https://help.github.com/articles/fork-a-repo/) the repository
+   and [clone](https://help.github.com/articles/cloning-a-repository) it to your local machine.
+2. Add the remote upstream repository:
+    ```bash
+    git remote add upstream https://github.com/Oghamark/homebranch.git
+    ```
+3. Create a new branch for your feature or bug fix:
+    ```bash
+    git checkout -b my-feature-branch dev
+    ```
+4. Run the development server:
+    ```bash
+    npm run dev
+    ```
+5. Make your changes and commit them with descriptive messages.
+6. Write tests for your changes if applicable, and ensure all tests pass before submitting your pull request.
+7. Push your changes to your fork:
+    ```bash
+    git push origin my-feature-branch
+    ```
+8. Open a pull request against the `dev` branch of the original repository.
+
+## Contributing Code of Conduct
+
+- If you are contributing to an existing issue, please comment on the issue to let others know you are working on it.
+- If you are opening a new issue, please provide as much detail as possible, including steps to reproduce the issue, screenshots, and any relevant logs.
+- When submitting a pull request, please include a clear description of the changes you have made and the problem they solve. If your pull request addresses an existing issue, please reference the issue number in your description (e.g., "Fixes #123").
+- Please ensure your code follows the project's coding style.
