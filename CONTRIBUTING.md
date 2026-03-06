@@ -11,8 +11,7 @@ To set up a development environment, follow these steps:
 
 > [!IMPORTANT]
 >  You will need to have the frontend and an authentication service running locally to test your changes.
-> Please refer to the [frontend repository](https://github.com/Oghamark/homebranch-web) and the [auth repository]
-> (https://github.com/Oghamark/Authentication)
+> Please refer to the [frontend repository](https://github.com/Oghamark/homebranch-web) and the [auth repository](https://github.com/Oghamark/Authentication)
 > or our [documentation](https://homebranch.app/docs/getting-started/) for instructions on how to set up the backend.
 
 1. [Fork](https://help.github.com/articles/fork-a-repo/) the repository
