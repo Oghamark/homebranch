@@ -8,7 +8,6 @@ import {
   Post,
   Put,
   Query,
-  Req,
   Res,
   StreamableFile,
   UploadedFiles,
@@ -34,8 +33,9 @@ import { JwtAuthGuard } from 'src/infrastructure/guards/jwt-auth.guard';
 import { MapResultInterceptor } from '../interceptors/map_result.interceptor';
 import { DownloadBookUseCase } from 'src/application/usecases/book/download-book.usecase';
 import { createReadStream, existsSync } from 'fs';
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { FetchBookMetadataUseCase } from 'src/application/usecases/book/fetch-book-metadata-use-case.service';
+import { CurrentUser } from 'src/infrastructure/decorators/current-user.decorator';
 
 @Controller('books')
 @UseInterceptors(MapResultInterceptor)
@@ -61,9 +61,8 @@ export class BookController {
 
   @Get('favorite')
   @UseGuards(JwtAuthGuard)
-  getFavoriteBooks(@Req() req: Request, @Query() paginationDto: GetBooksRequest) {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment,@typescript-eslint/no-unsafe-member-access
-    return this.getFavoriteBooksUseCase.execute({ ...paginationDto, userId: req['user']['id'] });
+  getFavoriteBooks(@Query() paginationDto: GetBooksRequest, @CurrentUser() currentUser: Express.User) {
+    return this.getFavoriteBooksUseCase.execute({ ...paginationDto, userId: currentUser.id });
   }
 
   @Get(`:id`)
@@ -119,7 +118,7 @@ export class BookController {
     ),
   )
   createBook(
-    @Req() request: Request,
+    @CurrentUser() currentUser: Express.User,
     @UploadedFiles()
     files: {
       file?: Express.Multer.File[];
@@ -132,8 +131,7 @@ export class BookController {
       ...createBookRequest,
       fileName: files.file!.at(0)!.filename,
       coverImageFileName: files.coverImage?.at(0)?.filename,
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment,@typescript-eslint/no-unsafe-member-access
-      uploadedByUserId: request['user'].id,
+      uploadedByUserId: currentUser.id,
     };
 
     return this.createBookUseCase.execute(bookRequest);
@@ -141,13 +139,11 @@ export class BookController {
 
   @Delete(`:id`)
   @UseGuards(JwtAuthGuard)
-  deleteBook(@Req() request: Request, @Param('id') id: string) {
+  deleteBook(@CurrentUser() currentUser: Express.User, @Param('id') id: string) {
     const deleteBookRequest: DeleteBookRequest = {
       id,
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment,@typescript-eslint/no-unsafe-member-access
-      requestingUserId: request['user'].id,
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call,@typescript-eslint/no-unsafe-member-access
-      requestingUserRole: request['user'].roles?.includes('ADMIN') ? 'ADMIN' : 'USER',
+      requestingUserId: currentUser.id,
+      requestingUserRole: currentUser.roles?.includes('ADMIN') ? 'ADMIN' : 'USER',
     };
     return this.deleteBookUseCase.execute(deleteBookRequest);
   }

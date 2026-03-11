@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Put, Req, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Put, UseGuards, UseInterceptors } from '@nestjs/common';
 import { JwtAuthGuard } from 'src/infrastructure/guards/jwt-auth.guard';
 import { MapResultInterceptor } from '../interceptors/map_result.interceptor';
 import { GetSavedPositionsUseCase } from 'src/application/usecases/saved-position/get-saved-positions.usecase';
@@ -6,7 +6,7 @@ import { GetSavedPositionUseCase } from 'src/application/usecases/saved-position
 import { SavePositionUseCase } from 'src/application/usecases/saved-position/save-position.usecase';
 import { DeleteSavedPositionUseCase } from 'src/application/usecases/saved-position/delete-saved-position.usecase';
 import { SavePositionDto } from '../dtos/save-position.dto';
-import { Request } from 'express';
+import { CurrentUser } from 'src/infrastructure/decorators/current-user.decorator';
 
 @Controller('users/:userId/saved-positions')
 @UseInterceptors(MapResultInterceptor)
@@ -20,23 +20,24 @@ export class SavedPositionController {
   ) {}
 
   @Get()
-  getSavedPositions(@Req() req: Request) {
-    const userId = req['user'].id;
-    return this.getSavedPositionsUseCase.execute({ userId });
+  getSavedPositions(@CurrentUser() currentUser: Express.User) {
+    return this.getSavedPositionsUseCase.execute({ userId: currentUser.id });
   }
 
   @Get(':bookId')
-  getSavedPosition(@Req() req: Request, @Param('bookId') bookId: string) {
-    const userId = req['user'].id;
-    return this.getSavedPositionUseCase.execute({ bookId, userId });
+  getSavedPosition(@CurrentUser() currentUser: Express.User, @Param('bookId') bookId: string) {
+    return this.getSavedPositionUseCase.execute({ bookId, userId: currentUser.id });
   }
 
   @Put(':bookId')
-  savePosition(@Req() req: Request, @Param('bookId') bookId: string, @Body() dto: SavePositionDto) {
-    const userId = req['user'].id;
+  savePosition(
+    @CurrentUser() currentUser: Express.User,
+    @Param('bookId') bookId: string,
+    @Body() dto: SavePositionDto,
+  ) {
     return this.savePositionUseCase.execute({
       bookId,
-      userId,
+      userId: currentUser.id,
       position: dto.position,
       deviceName: dto.deviceName,
       percentage: dto.percentage,
@@ -45,8 +46,7 @@ export class SavedPositionController {
 
   @Delete(':bookId')
   @HttpCode(204)
-  deleteSavedPosition(@Req() req: Request, @Param('bookId') bookId: string) {
-    const userId = req['user'].id;
-    return this.deleteSavedPositionUseCase.execute({ bookId, userId });
+  deleteSavedPosition(@CurrentUser() currentUser: Express.User, @Param('bookId') bookId: string) {
+    return this.deleteSavedPositionUseCase.execute({ bookId, userId: currentUser.id });
   }
 }

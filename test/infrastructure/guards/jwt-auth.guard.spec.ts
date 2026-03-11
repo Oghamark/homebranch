@@ -1,146 +1,73 @@
 /* eslint-disable */
-import { ExecutionContext } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
-import { JwtAuthGuard } from 'src/infrastructure/guards/jwt-auth.guard';
-import { ITokenGateway } from 'src/application/interfaces/jwt-token.gateway';
-import { JwtPayload } from 'src/domain/value-objects/token-payload.value-object';
-import {
-  InvalidTokenError,
-  TokenExpiredError,
-} from 'src/domain/exceptions/auth.exceptions';
+import { JwtStrategy } from 'src/infrastructure/strategies/jwt.strategy';
 
-describe('JwtAuthGuard', () => {
-  let guard: JwtAuthGuard;
-  let tokenGateway: jest.Mocked<ITokenGateway>;
-
-  const mockPayload = new JwtPayload(
-    'user-1',
-    'alice@example.com',
-    ['USER'],
-    new Date(),
-    new Date(Date.now() + 3600000),
-  );
-
-  function createMockContext(options: {
-    cookieToken?: string;
-    authorizationHeader?: string;
-  } = {}): ExecutionContext {
-    const request = {
-      cookies: { access_token: options.cookieToken },
-      headers: { authorization: options.authorizationHeader },
-    };
-    return {
-      switchToHttp: () => ({
-        getRequest: () => request,
-      }),
-    } as unknown as ExecutionContext;
-  }
+describe('JwtStrategy', () => {
+  let strategy: JwtStrategy;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
-        JwtAuthGuard,
+        JwtStrategy,
         {
-          provide: 'TokenGateway',
+          provide: ConfigService,
           useValue: {
-            verifyAccessToken: jest.fn(),
+            get: jest.fn().mockReturnValue('test-secret'),
+            getOrThrow: jest.fn().mockReturnValue('test-secret'),
           },
         },
       ],
     }).compile();
 
-    guard = module.get<JwtAuthGuard>(JwtAuthGuard);
-    tokenGateway = module.get('TokenGateway');
+    strategy = module.get<JwtStrategy>(JwtStrategy);
   });
 
   afterEach(() => {
     jest.clearAllMocks();
   });
 
-  it('should return true and attach user to request for a valid cookie token', async () => {
-    tokenGateway.verifyAccessToken.mockResolvedValue(mockPayload);
-
-    const context = createMockContext({ cookieToken: 'valid-token' });
-    const result = await guard.canActivate(context);
-
-    expect(result).toBe(true);
-
-    const request = context.switchToHttp().getRequest();
-    expect(request['user']).toEqual({
-      id: mockPayload.userId,
-      email: mockPayload.email,
-      roles: mockPayload.roles,
-    });
+  it('should map sub to id and return user object', async () => {
+    const payload = { sub: 'user-1', email: 'alice@example.com', roles: ['USER'] };
+    const result = await strategy.validate(payload as any);
+    expect(result).toEqual({ id: 'user-1', email: 'alice@example.com', roles: ['USER'] });
   });
 
-  it('should return true and attach user to request for a valid Bearer token', async () => {
-    tokenGateway.verifyAccessToken.mockResolvedValue(mockPayload);
-
-    const context = createMockContext({ authorizationHeader: 'Bearer valid-token' });
-    const result = await guard.canActivate(context);
-
-    expect(result).toBe(true);
-
-    const request = context.switchToHttp().getRequest();
-    expect(request['user']).toEqual({
-      id: mockPayload.userId,
-      email: mockPayload.email,
-      roles: mockPayload.roles,
-    });
+  it('should return multiple roles', async () => {
+    const payload = { sub: 'admin-1', email: 'admin@example.com', roles: ['USER', 'ADMIN'] };
+    const result = await strategy.validate(payload as any);
+    expect(result).toEqual({ id: 'admin-1', email: 'admin@example.com', roles: ['USER', 'ADMIN'] });
   });
 
-  it('should prefer the cookie token over the Authorization header when both are present', async () => {
-    tokenGateway.verifyAccessToken.mockResolvedValue(mockPayload);
-
-    const context = createMockContext({
-      cookieToken: 'cookie-token',
-      authorizationHeader: 'Bearer header-token',
-    });
-    await guard.canActivate(context);
-
-    expect(tokenGateway.verifyAccessToken).toHaveBeenCalledWith('cookie-token');
+  it('should default roles to empty array when missing from payload', async () => {
+    const payload = { sub: 'user-2', email: 'bob@example.com' };
+    const result = await strategy.validate(payload as any);
+    expect(result).toEqual({ id: 'user-2', email: 'bob@example.com', roles: [] });
   });
 
-  it('should attach roles from the JWT payload to the request user', async () => {
-    const adminPayload = new JwtPayload(
-      'user-admin',
-      'admin@example.com',
-      ['ADMIN'],
-      new Date(),
-      new Date(Date.now() + 3600000),
-    );
-    tokenGateway.verifyAccessToken.mockResolvedValue(adminPayload);
-
-    const context = createMockContext({ cookieToken: 'admin-token' });
-    await guard.canActivate(context);
-
-    const request = context.switchToHttp().getRequest();
-    expect(request['user'].roles).toEqual(['ADMIN']);
+  it('should preserve email from payload', async () => {
+    const payload = { sub: 'user-3', email: 'charlie@example.com', roles: [] };
+    const result = await strategy.validate(payload as any);
+    expect(result.email).toBe('charlie@example.com');
   });
 
-  it('should throw InvalidTokenError when no token is provided', async () => {
-    const context = createMockContext();
-    await expect(guard.canActivate(context)).rejects.toThrow(InvalidTokenError);
+  // Authentication service issues "role" (singular string) — normalize to roles array
+  it('should normalize singular role string from Authentication token to roles array', async () => {
+    const payload = { sub: 'user-4', email: 'dave@example.com', role: 'ADMIN' };
+    const result = await strategy.validate(payload as any);
+    expect(result).toEqual({ id: 'user-4', email: 'dave@example.com', roles: ['ADMIN'] });
   });
 
-  it('should throw InvalidTokenError for an invalid cookie token', async () => {
-    tokenGateway.verifyAccessToken.mockRejectedValue(new Error('bad token'));
-
-    const context = createMockContext({ cookieToken: 'bad-token' });
-    await expect(guard.canActivate(context)).rejects.toThrow(InvalidTokenError);
+  it('should normalize USER role from Authentication token to roles array', async () => {
+    const payload = { sub: 'user-5', email: 'eve@example.com', role: 'USER' };
+    const result = await strategy.validate(payload as any);
+    expect(result).toEqual({ id: 'user-5', email: 'eve@example.com', roles: ['USER'] });
   });
 
-  it('should throw InvalidTokenError for an invalid Bearer token', async () => {
-    tokenGateway.verifyAccessToken.mockRejectedValue(new Error('bad token'));
-
-    const context = createMockContext({ authorizationHeader: 'Bearer bad-token' });
-    await expect(guard.canActivate(context)).rejects.toThrow(InvalidTokenError);
-  });
-
-  it('should throw InvalidTokenError when token is expired', async () => {
-    tokenGateway.verifyAccessToken.mockRejectedValue(new TokenExpiredError());
-
-    const context = createMockContext({ cookieToken: 'expired-token' });
-    await expect(guard.canActivate(context)).rejects.toThrow(InvalidTokenError);
+  it('should prefer roles array over singular role when both are present', async () => {
+    const payload = { sub: 'user-6', email: 'frank@example.com', role: 'USER', roles: ['ADMIN'] };
+    const result = await strategy.validate(payload as any);
+    expect(result.roles).toEqual(['ADMIN']);
   });
 });
+
