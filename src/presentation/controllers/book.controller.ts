@@ -35,6 +35,7 @@ import { DownloadBookUseCase } from 'src/application/usecases/book/download-book
 import { createReadStream, existsSync } from 'fs';
 import { Response } from 'express';
 import { FetchBookMetadataUseCase } from 'src/application/usecases/book/fetch-book-metadata-use-case.service';
+import { FetchBookSummaryUseCase } from 'src/application/usecases/book/fetch-book-summary.usecase';
 import { CurrentUser } from 'src/infrastructure/decorators/current-user.decorator';
 
 @Controller('books')
@@ -49,6 +50,7 @@ export class BookController {
     private readonly updateBookUseCase: UpdateBookUseCase,
     private readonly downloadBookUseCase: DownloadBookUseCase,
     private readonly fetchBookMetadataUseCase: FetchBookMetadataUseCase,
+    private readonly fetchBookSummaryUseCase: FetchBookSummaryUseCase,
   ) {}
 
   private readonly logger = new Logger('BookController');
@@ -160,8 +162,14 @@ export class BookController {
 
   @Post(':id/fetch-metadata')
   @UseGuards(JwtAuthGuard)
-  fetchBookSummary(@Param('id') id: string) {
+  fetchBookMetadata(@Param('id') id: string) {
     return this.fetchBookMetadataUseCase.execute({ id });
+  }
+
+  @Post(':id/fetch-summary')
+  @UseGuards(JwtAuthGuard)
+  fetchBookSummary(@Param('id') id: string) {
+    return this.fetchBookSummaryUseCase.execute({ id });
   }
 
   @Get(':id/download')

@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { IMetadataGateway } from 'src/application/interfaces/metadata-gateway';
+import { ISummaryGateway } from 'src/application/interfaces/summary-gateway';
 import { Book } from 'src/domain/entities/book.entity';
 import { Author } from 'src/domain/entities/author.entity';
 
@@ -60,7 +61,7 @@ interface AuthorSearchResult {
 }
 
 @Injectable()
-export class OpenLibraryGateway implements IMetadataGateway {
+export class OpenLibraryGateway implements IMetadataGateway, ISummaryGateway {
   private readonly logger = new Logger(OpenLibraryGateway.name);
   private readonly baseUrl = 'https://openlibrary.org';
   private readonly coversUrl = 'https://covers.openlibrary.org';
@@ -154,6 +155,23 @@ export class OpenLibraryGateway implements IMetadataGateway {
       : null;
 
     return { genres, summary };
+  }
+
+  async fetchSummary(book: Book): Promise<string | null> {
+    try {
+      const bookDoc = await this.searchBook(book.title, book.author);
+      if (!bookDoc) {
+        return null;
+      }
+      const workDetails = await this.fetchWorkDetails(bookDoc.key);
+      return workDetails?.summary ?? null;
+    } catch (error) {
+      const cause = error instanceof TypeError && error.cause instanceof Error ? ` (${error.cause.message})` : '';
+      this.logger.warn(
+        `Failed to fetch summary for "${book.title}" from Open Library: ${error instanceof Error ? error.message : String(error)}${cause}`,
+      );
+      return null;
+    }
   }
 
   async enrichAuthor(author: Author): Promise<Author> {

@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { IMetadataGateway } from 'src/application/interfaces/metadata-gateway';
+import { ISummaryGateway } from 'src/application/interfaces/summary-gateway';
 import { ISettingRepository } from 'src/application/interfaces/setting-repository';
 import { Book } from 'src/domain/entities/book.entity';
 import { Author } from 'src/domain/entities/author.entity';
@@ -36,7 +37,7 @@ const FIELDS =
   'items(volumeInfo(publisher,pageCount,language,categories,averageRating,ratingsCount,description,industryIdentifiers,seriesInfo))';
 
 @Injectable()
-export class GoogleBooksGateway implements IMetadataGateway {
+export class GoogleBooksGateway implements IMetadataGateway, ISummaryGateway {
   private readonly logger = new Logger(GoogleBooksGateway.name);
   private readonly baseUrl = 'https://www.googleapis.com/books/v1';
   private readonly timeoutMs = 8000;
@@ -149,5 +150,21 @@ export class GoogleBooksGateway implements IMetadataGateway {
 
   enrichAuthor(author: Author): Promise<Author> {
     return Promise.resolve(author);
+  }
+
+  async fetchSummary(book: Book): Promise<string | null> {
+    const apiKey = await this.resolveApiKey();
+    if (!apiKey) {
+      return null;
+    }
+    try {
+      const volumeInfo = await this.fetchVolumeInfo(book, apiKey);
+      return volumeInfo?.description ?? null;
+    } catch (error) {
+      this.logger.warn(
+        `Failed to fetch summary for "${book.title}" from Google Books: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return null;
+    }
   }
 }

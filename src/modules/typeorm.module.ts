@@ -6,6 +6,7 @@ import { SnakeNamingStrategy } from 'typeorm-naming-strategies';
 import { BookShelfEntity } from '../infrastructure/database/book-shelf.entity';
 import { SavedPositionEntity } from '../infrastructure/database/saved-position.entity';
 import { AuthorEntity } from '../infrastructure/database/author.entity';
+import { SettingEntity } from '../infrastructure/database/setting.entity';
 import { SchemaUpdate1755566512418 } from '../migrations/1755566512418-schema-update';
 import { AddUserAndRoleTables1739836800000 } from '../migrations/1739836800000-AddUserAndRoleTables';
 import { SeedAdminRole1739836800001 } from '../migrations/1739836800001-SeedAdminRole';
@@ -48,7 +49,7 @@ import { AddCreatedAtToBook1772681032915 } from 'src/migrations/1772681032915-Ad
           username: username,
           password: password,
           database: database,
-          entities: [BookEntity, BookShelfEntity, SavedPositionEntity, AuthorEntity],
+          entities: [BookEntity, BookShelfEntity, SavedPositionEntity, AuthorEntity, SettingEntity],
           migrations: [
             SchemaUpdate1755566512418,
             AddUserAndRoleTables1739836800000,

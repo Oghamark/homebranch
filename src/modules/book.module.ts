@@ -15,7 +15,9 @@ import { AuthModule } from 'src/modules/auth.module';
 import { OpenLibraryGateway } from 'src/infrastructure/gateways/open-library.gateway';
 import { GoogleBooksGateway } from 'src/infrastructure/gateways/google-books.gateway';
 import { CompositeMetadataGateway } from 'src/infrastructure/gateways/composite-metadata.gateway';
+import { CompositeSummaryGateway } from 'src/infrastructure/gateways/composite-summary.gateway';
 import { FetchBookMetadataUseCase } from 'src/application/usecases/book/fetch-book-metadata-use-case.service';
+import { FetchBookSummaryUseCase } from 'src/application/usecases/book/fetch-book-summary.usecase';
 import { MetadataSchedulerService } from 'src/infrastructure/schedulers/metadata-scheduler.service';
 import { EpubParserService } from 'src/infrastructure/parsers/epub-parser.service';
 import { SettingsModule } from 'src/modules/settings.module';
@@ -38,6 +40,7 @@ import { SettingsModule } from 'src/modules/settings.module';
     GetBookByIdUseCase,
     UpdateBookUseCase,
     FetchBookMetadataUseCase,
+    FetchBookSummaryUseCase,
     // ... other use cases
 
     // Mappers
@@ -55,6 +58,10 @@ import { SettingsModule } from 'src/modules/settings.module';
     {
       provide: 'MetadataGateway',
       useClass: CompositeMetadataGateway,
+    },
+    {
+      provide: 'SummaryGateway',
+      useClass: CompositeSummaryGateway,
     },
 
     // Parsers
