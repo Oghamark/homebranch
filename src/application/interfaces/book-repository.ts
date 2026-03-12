@@ -56,4 +56,12 @@ export interface IBookRepository extends IRepository<Book> {
   ): Promise<Result<PaginationResult<Book[]>>>;
   findBooksWithoutMetadata(limit: number): Promise<Result<Book[]>>;
   findNewArrivals(limit?: number, offset?: number): Promise<Result<PaginationResult<Book[]>>>;
+  findByFileName(fileName: string, includeDeleted?: boolean): Promise<Result<Book>>;
+  findByContentHash(hash: string, includeDeleted?: boolean): Promise<Result<Book>>;
+  findAllActive(): Promise<Result<Book[]>>;
+  softDelete(id: string): Promise<Result<Book>>;
+  restore(id: string): Promise<Result<Book>>;
+  permanentDelete(id: string): Promise<Result<Book>>;
+  findUnowned(limit?: number, offset?: number): Promise<Result<PaginationResult<Book[]>>>;
+  findOrphaned(knownUserIds: string[], limit?: number, offset?: number): Promise<Result<PaginationResult<Book[]>>>;
 }

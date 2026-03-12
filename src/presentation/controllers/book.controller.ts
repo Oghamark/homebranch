@@ -5,6 +5,7 @@ import {
   Get,
   Logger,
   Param,
+  Patch,
   Post,
   Put,
   Query,
@@ -21,6 +22,7 @@ import { CreateBookUseCase } from 'src/application/usecases/book/create-book.use
 import { DeleteBookUseCase } from 'src/application/usecases/book/delete-book.usecase';
 import { GetBooksUseCase } from 'src/application/usecases/book/get-books.usecase';
 import { UpdateBookUseCase } from 'src/application/usecases/book/update-book.usecase';
+import { AssignBookOwnerUseCase } from 'src/application/usecases/book/assign-book-owner.usecase';
 import { UpdateBookDto } from '../dtos/update-book.dto';
 import { GetBookByIdUseCase } from 'src/application/usecases/book/get-book-by-id.usecase';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
@@ -30,6 +32,8 @@ import { basename, join } from 'path';
 import { DeleteBookRequest } from 'src/application/contracts/book/delete-book-request';
 import { GetFavoriteBooksUseCase } from 'src/application/usecases/book/get-favorite-books-use-case.service';
 import { JwtAuthGuard } from 'src/infrastructure/guards/jwt-auth.guard';
+import { RolesGuard } from 'src/infrastructure/guards/roles.guard';
+import { Roles } from 'src/infrastructure/guards/roles.decorator';
 import { MapResultInterceptor } from '../interceptors/map_result.interceptor';
 import { DownloadBookUseCase } from 'src/application/usecases/book/download-book.usecase';
 import { createReadStream, existsSync } from 'fs';
@@ -37,6 +41,23 @@ import { Response } from 'express';
 import { FetchBookMetadataUseCase } from 'src/application/usecases/book/fetch-book-metadata-use-case.service';
 import { FetchBookSummaryUseCase } from 'src/application/usecases/book/fetch-book-summary.usecase';
 import { CurrentUser } from 'src/infrastructure/decorators/current-user.decorator';
+import { IsUUID, IsOptional } from 'class-validator';
+import { Result } from 'src/core/result';
+
+class AssignOwnerDto {
+  @IsUUID()
+  @IsOptional()
+  userId: string | null;
+}
+
+class BulkAssignOwnerDto {
+  @IsUUID(undefined, { each: true })
+  bookIds: string[];
+
+  @IsUUID()
+  @IsOptional()
+  userId: string | null;
+}
 
 @Controller('books')
 @UseInterceptors(MapResultInterceptor)
@@ -51,6 +72,7 @@ export class BookController {
     private readonly downloadBookUseCase: DownloadBookUseCase,
     private readonly fetchBookMetadataUseCase: FetchBookMetadataUseCase,
     private readonly fetchBookSummaryUseCase: FetchBookSummaryUseCase,
+    private readonly assignBookOwnerUseCase: AssignBookOwnerUseCase,
   ) {}
 
   private readonly logger = new Logger('BookController');
@@ -148,6 +170,35 @@ export class BookController {
       requestingUserRole: currentUser.roles?.includes('ADMIN') ? 'ADMIN' : 'USER',
     };
     return this.deleteBookUseCase.execute(deleteBookRequest);
+  }
+
+  @Patch('assign-owner')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  async bulkAssignOwner(@Body() dto: BulkAssignOwnerDto, @CurrentUser() currentUser: Express.User) {
+    const results = await Promise.allSettled(
+      dto.bookIds.map((bookId) =>
+        this.assignBookOwnerUseCase.execute({
+          id: bookId,
+          ownerId: dto.userId,
+          requestingUserRole: currentUser.roles?.includes('ADMIN') ? 'ADMIN' : 'USER',
+        }),
+      ),
+    );
+    const assigned = results.filter((r) => r.status === 'fulfilled' && r.value.isSuccess()).length;
+    const failed = results.length - assigned;
+    return Result.ok({ assigned, failed, total: results.length });
+  }
+
+  @Patch(`:id/owner`)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  assignOwner(@Param('id') id: string, @Body() dto: AssignOwnerDto, @CurrentUser() currentUser: Express.User) {
+    return this.assignBookOwnerUseCase.execute({
+      id,
+      ownerId: dto.userId,
+      requestingUserRole: currentUser.roles?.includes('ADMIN') ? 'ADMIN' : 'USER',
+    });
   }
 
   @Put(`:id`)

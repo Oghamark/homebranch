@@ -16,11 +16,15 @@ services:
       CORS_ORIGIN: "*"
       JWT_ACCESS_SECRET: dev_access_secret_change_me
       JWT_REFRESH_SECRET: dev_refresh_secret_change_me
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
     ports:
       - "8080:8080"
     command: sleep infinity
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   db:
@@ -39,6 +43,20 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
 volumes:
   node_modules:
   postgres-data:
+  redis-data:

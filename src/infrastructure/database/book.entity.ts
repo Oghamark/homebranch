@@ -63,6 +63,32 @@ export class BookEntity {
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
+  @Column({ name: 'deleted_at', type: 'timestamp', nullable: true })
+  deletedAt?: Date;
+
+  @Column({ name: 'last_synced_at', type: 'timestamp', nullable: true })
+  lastSyncedAt?: Date;
+
+  @Column({ name: 'synced_metadata', type: 'jsonb', nullable: true })
+  syncedMetadata?: Record<string, unknown>;
+
+  @Column({
+    name: 'file_mtime',
+    type: 'bigint',
+    nullable: true,
+    transformer: {
+      to: (v: number | undefined) => (v != null ? Math.round(v) : v),
+      from: (v: string | null) => (v ? Number(v) : undefined),
+    },
+  })
+  fileMtime?: number;
+
+  @Column({ name: 'file_content_hash', nullable: true })
+  fileContentHash?: string;
+
+  @Column({ name: 'metadata_updated_at', type: 'timestamp', nullable: true })
+  metadataUpdatedAt?: Date;
+
   @ManyToMany(() => BookShelfEntity, (bookShelf) => bookShelf.books)
   bookShelves?: BookShelfEntity[];
 }

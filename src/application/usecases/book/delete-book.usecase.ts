@@ -23,6 +23,6 @@ export class DeleteBookUseCase implements UseCase<DeleteBookRequest, Book> {
       return Result.fail(new DeleteBookForbiddenFailure());
     }
 
-    return await this.bookRepository.delete(id);
+    return await this.bookRepository.permanentDelete(id);
   }
 }

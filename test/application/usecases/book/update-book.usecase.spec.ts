@@ -5,11 +5,13 @@ import { mock } from 'jest-mock-extended';
 import { mockBook } from 'test/mocks/bookMocks';
 import { Result, UnexpectedFailure } from 'src/core/result';
 import { BookNotFoundFailure } from 'src/domain/failures/book.failures';
+import { getQueueToken } from '@nestjs/bullmq';
 import Mocked = jest.Mocked;
 
 describe('UpdateBookUseCase', () => {
   let useCase: UpdateBookUseCase;
   let bookRepository: Mocked<IBookRepository>;
+  const mockQueue = { add: jest.fn().mockResolvedValue({ id: 'job-1' }) };
 
   const bookNotFoundFailure = new BookNotFoundFailure();
 
@@ -20,6 +22,10 @@ describe('UpdateBookUseCase', () => {
         {
           provide: 'BookRepository',
           useValue: mock<IBookRepository>(),
+        },
+        {
+          provide: getQueueToken('file-processing'),
+          useValue: mockQueue,
         },
       ],
     }).compile();

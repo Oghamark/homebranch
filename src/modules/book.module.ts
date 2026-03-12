@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { BullModule } from '@nestjs/bullmq';
 import { CreateBookUseCase } from 'src/application/usecases/book/create-book.usecase';
 import { DeleteBookUseCase } from 'src/application/usecases/book/delete-book.usecase';
 import { DownloadBookUseCase } from 'src/application/usecases/book/download-book.usecase';
@@ -7,6 +8,7 @@ import { GetBookByIdUseCase } from 'src/application/usecases/book/get-book-by-id
 import { GetBooksUseCase } from 'src/application/usecases/book/get-books.usecase';
 import { GetFavoriteBooksUseCase } from 'src/application/usecases/book/get-favorite-books-use-case.service';
 import { UpdateBookUseCase } from 'src/application/usecases/book/update-book.usecase';
+import { AssignBookOwnerUseCase } from 'src/application/usecases/book/assign-book-owner.usecase';
 import { BookEntity } from 'src/infrastructure/database/book.entity';
 import { BookMapper } from 'src/infrastructure/mappers/book.mapper';
 import { TypeOrmBookRepository } from 'src/infrastructure/repositories/book.repository';
@@ -23,7 +25,12 @@ import { EpubParserService } from 'src/infrastructure/parsers/epub-parser.servic
 import { SettingsModule } from 'src/modules/settings.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([BookEntity]), AuthModule, SettingsModule],
+  imports: [
+    TypeOrmModule.forFeature([BookEntity]),
+    BullModule.registerQueue({ name: 'file-processing' }),
+    AuthModule,
+    SettingsModule,
+  ],
   providers: [
     // Repository
     {
@@ -39,6 +46,7 @@ import { SettingsModule } from 'src/modules/settings.module';
     GetFavoriteBooksUseCase,
     GetBookByIdUseCase,
     UpdateBookUseCase,
+    AssignBookOwnerUseCase,
     FetchBookMetadataUseCase,
     FetchBookSummaryUseCase,
     // ... other use cases

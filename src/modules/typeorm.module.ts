@@ -20,6 +20,7 @@ import { AddCreatedByUserIdToBookShelf1772317868306 } from '../migrations/177231
 import { AddBookMetadataFields1772395519432 } from '../migrations/1772395519432-AddBookMetadataFields';
 import { CreateSettingTable1772669702941 } from 'src/migrations/1772669702941-CreateSettingTable';
 import { AddCreatedAtToBook1772681032915 } from 'src/migrations/1772681032915-AddCreatedAtToBook';
+import { AddSyncAndSoftDeleteFields1773287271444 } from 'src/migrations/1773287271444-AddSyncAndSoftDeleteFields';
 
 @Module({
   imports: [
@@ -64,6 +65,7 @@ import { AddCreatedAtToBook1772681032915 } from 'src/migrations/1772681032915-Ad
             AddBookMetadataFields1772395519432,
             CreateSettingTable1772669702941,
             AddCreatedAtToBook1772681032915,
+            AddSyncAndSoftDeleteFields1773287271444,
           ],
           migrationsRun: true,
           migrationsTableName: 'migration_table',

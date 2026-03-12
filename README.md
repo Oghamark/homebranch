@@ -30,6 +30,12 @@ It provides a user-friendly interface to organize, search, and read your ebooks 
 - User management with roles and permissions
 - Pagination and search across the library
 - OPDS catalog (v1.2 Atom and v2.0 JSON) for e-reader integration — authenticate with email and password via the companion Auth service
+- Automated library scanning — detects new, modified, and removed EPUB files in the uploads directory
+- Bidirectional metadata sync: three-way merge between the EPUB file, database, and last-synced snapshot (file wins on conflict); updated database metadata is written back to the EPUB file
+- Soft delete when a file is removed; automatically restored when the file is re-added (matched by filename or content hash)
+- Background job queues powered by BullMQ and Redis for reliable async processing
+- Real-time Server-Sent Events (SSE) at `GET /library/events` — notifies connected clients of library changes so they can refetch without polling
+- Job history API (`GET /jobs`, `GET /jobs/:id`) with manual scan trigger (`POST /library/scan`) and per-book sync (`POST /library/books/:id/sync`)
 
 ---
 
