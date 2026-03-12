@@ -17,6 +17,11 @@ import { AddBookToBookShelfUseCase } from 'src/application/usecases/bookshelf/ad
 import { RemoveBookFromBookShelfUseCase } from 'src/application/usecases/bookshelf/remove-book-from-book-shelf-use-case.service';
 import { JwtAuthGuard } from 'src/infrastructure/guards/jwt-auth.guard';
 
+interface ApiResponse<T = unknown> {
+  success: boolean;
+  value: T;
+}
+
 describe('BookShelfController (e2e)', () => {
   let app: INestApplication<App>;
 
@@ -106,8 +111,9 @@ describe('BookShelfController (e2e)', () => {
 
       const response = await request(app.getHttpServer()).get('/book-shelves').expect(200);
 
-      expect(response.body.success).toBe(true);
-      expect(response.body.value.data).toHaveLength(1);
+      const body = response.body as ApiResponse<{ data: unknown[] }>;
+      expect(body.success).toBe(true);
+      expect(body.value.data).toHaveLength(1);
     });
   });
 
@@ -117,8 +123,9 @@ describe('BookShelfController (e2e)', () => {
 
       const response = await request(app.getHttpServer()).get('/book-shelves/shelf-1').expect(200);
 
-      expect(response.body.success).toBe(true);
-      expect(response.body.value.title).toBe('Fiction');
+      const body = response.body as ApiResponse<{ title: string }>;
+      expect(body.success).toBe(true);
+      expect(body.value.title).toBe('Fiction');
     });
 
     it('should return error when bookshelf not found', async () => {
@@ -126,7 +133,7 @@ describe('BookShelfController (e2e)', () => {
 
       const response = await request(app.getHttpServer()).get('/book-shelves/nonexistent');
 
-      expect(response.body.success).toBe(false);
+      expect((response.body as ApiResponse).success).toBe(false);
     });
   });
 
@@ -144,8 +151,9 @@ describe('BookShelfController (e2e)', () => {
 
       const response = await request(app.getHttpServer()).get('/book-shelves/shelf-1/books').expect(200);
 
-      expect(response.body.success).toBe(true);
-      expect(response.body.value.data).toHaveLength(1);
+      const body = response.body as ApiResponse<{ data: unknown[] }>;
+      expect(body.success).toBe(true);
+      expect(body.value.data).toHaveLength(1);
     });
   });
 
@@ -155,7 +163,7 @@ describe('BookShelfController (e2e)', () => {
 
       const response = await request(app.getHttpServer()).post('/book-shelves').send({ title: 'Fiction' }).expect(200);
 
-      expect(response.body.success).toBe(true);
+      expect((response.body as ApiResponse).success).toBe(true);
       expect(mockCreateBookShelfUseCase.execute).toHaveBeenCalledWith(expect.objectContaining({ title: 'Fiction' }));
     });
   });
@@ -170,7 +178,7 @@ describe('BookShelfController (e2e)', () => {
         .send({ title: 'Updated Title' })
         .expect(200);
 
-      expect(response.body.success).toBe(true);
+      expect((response.body as ApiResponse).success).toBe(true);
       expect(mockUpdateBookShelfUseCase.execute).toHaveBeenCalledWith(
         expect.objectContaining({ id: 'shelf-1', title: 'Updated Title' }),
       );
@@ -183,7 +191,7 @@ describe('BookShelfController (e2e)', () => {
 
       const response = await request(app.getHttpServer()).delete('/book-shelves/shelf-1').expect(200);
 
-      expect(response.body.success).toBe(true);
+      expect((response.body as ApiResponse).success).toBe(true);
       expect(mockDeleteBookShelfUseCase.execute).toHaveBeenCalledWith(expect.objectContaining({ id: 'shelf-1' }));
     });
   });
@@ -198,7 +206,7 @@ describe('BookShelfController (e2e)', () => {
         .send({ bookId: 'book-1' })
         .expect(200);
 
-      expect(response.body.success).toBe(true);
+      expect((response.body as ApiResponse).success).toBe(true);
       expect(mockAddBookToBookShelfUseCase.execute).toHaveBeenCalledWith({
         bookShelfId: 'shelf-1',
         bookId: 'book-1',
@@ -215,7 +223,7 @@ describe('BookShelfController (e2e)', () => {
         .send({ bookId: 'book-1' })
         .expect(200);
 
-      expect(response.body.success).toBe(true);
+      expect((response.body as ApiResponse).success).toBe(true);
       expect(mockRemoveBookFromBookShelfUseCase.execute).toHaveBeenCalledWith({
         bookShelfId: 'shelf-1',
         bookId: 'book-1',

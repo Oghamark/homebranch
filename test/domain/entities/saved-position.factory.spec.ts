@@ -70,15 +70,15 @@ describe('SavedPositionFactory', () => {
     });
 
     test('Throws error when bookId is null', () => {
-      expect(() => SavedPositionFactory.create(null as any, 'user-6', 'epubcfi(/6/4!/4/2/1:0)', 'Device')).toThrow(
-        'Book ID and User ID are required to create a saved position.',
-      );
+      expect(() =>
+        SavedPositionFactory.create(null as unknown as string, 'user-6', 'epubcfi(/6/4!/4/2/1:0)', 'Device'),
+      ).toThrow('Book ID and User ID are required to create a saved position.');
     });
 
     test('Throws error when userId is null', () => {
-      expect(() => SavedPositionFactory.create('book-6', null as any, 'epubcfi(/6/4!/4/2/1:0)', 'Device')).toThrow(
-        'Book ID and User ID are required to create a saved position.',
-      );
+      expect(() =>
+        SavedPositionFactory.create('book-6', null as unknown as string, 'epubcfi(/6/4!/4/2/1:0)', 'Device'),
+      ).toThrow('Book ID and User ID are required to create a saved position.');
     });
   });
 });

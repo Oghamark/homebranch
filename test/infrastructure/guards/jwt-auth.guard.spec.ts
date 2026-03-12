@@ -70,4 +70,3 @@ describe('JwtStrategy', () => {
     expect(result.roles).toEqual(['ADMIN']);
   });
 });
-

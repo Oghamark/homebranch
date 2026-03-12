@@ -12,7 +12,7 @@ import { ForbiddenError } from 'src/domain/exceptions/forbidden.exception';
 describe('DomainExceptionFilter', () => {
   let filter: DomainExceptionFilter;
   let mockArgumentsHost: ArgumentsHost;
-  let mockResponse: any;
+  let mockResponse: { status: jest.Mock; json: jest.Mock };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -28,7 +28,6 @@ describe('DomainExceptionFilter', () => {
 
     mockArgumentsHost = {
       switchToHttp: jest.fn(() => ({
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-return
         getResponse: jest.fn(() => mockResponse),
         getRequest: jest.fn(() => ({
           url: '/test',

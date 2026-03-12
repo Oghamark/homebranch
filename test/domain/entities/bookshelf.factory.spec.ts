@@ -32,7 +32,9 @@ describe('BookShelfFactory', () => {
     });
 
     test('Throws error when title is null', () => {
-      expect(() => BookShelfFactory.create('shelf-5', null as any)).toThrow('Title is required to create a bookshelf.');
+      expect(() => BookShelfFactory.create('shelf-5', null as unknown as string)).toThrow(
+        'Title is required to create a bookshelf.',
+      );
     });
 
     test('Defaults to empty books array', () => {

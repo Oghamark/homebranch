@@ -24,7 +24,7 @@ export class EpubParserService implements IEpubParser {
   private readonly logger = new Logger(EpubParserService.name);
 
   async parse(filePath: string): Promise<IEpubMetadata> {
-    const epub = await EPub.createAsync(filePath);
+    const epub = (await EPub.createAsync(filePath)) as EPub;
     const meta = epub.metadata as unknown as EpubMetadata;
     const result: IEpubMetadata = {};
 
@@ -74,8 +74,8 @@ export class EpubParserService implements IEpubParser {
       const meta = epub.metadata as unknown as EpubMetadata;
       const coverId = meta.cover;
       if (coverId && typeof coverId === 'string') {
-        const [data, mimeType] = await epub.getImageAsync(coverId);
-        if (data) return { data, mimeType: mimeType as string };
+        const [data, mimeType] = (await epub.getImageAsync(coverId)) as [Buffer, string];
+        if (data) return { data, mimeType };
       }
 
       // Fallback: find first manifest item with "cover" in its ID that is an image
@@ -84,8 +84,8 @@ export class EpubParserService implements IEpubParser {
         (item) => item.id?.toLowerCase().includes('cover') && item['media-type']?.startsWith('image/'),
       );
       if (coverItem?.id) {
-        const [data, mimeType] = await epub.getImageAsync(coverItem.id);
-        if (data) return { data, mimeType: mimeType as string };
+        const [data, mimeType] = (await epub.getImageAsync(coverItem.id)) as [Buffer, string];
+        if (data) return { data, mimeType };
       }
     } catch (err) {
       this.logger.warn(`Could not extract cover image from EPUB: ${String(err)}`);

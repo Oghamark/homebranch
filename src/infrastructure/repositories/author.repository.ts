@@ -77,7 +77,13 @@ export class TypeOrmAuthorRepository implements IAuthorRepository {
       queryBuilder.offset(offset);
     }
 
-    const rows = await queryBuilder.getRawMany();
+    const rows = await queryBuilder.getRawMany<{
+      id: string | null;
+      name: string;
+      biography: string | null;
+      profilePictureUrl: string | null;
+      bookCount: string;
+    }>();
 
     const authors = rows.map((row) => {
       const author = new Author(row.id ?? null, row.name, row.biography ?? null, row.profilePictureUrl ?? null);

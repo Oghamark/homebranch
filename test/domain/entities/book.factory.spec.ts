@@ -51,13 +51,13 @@ describe('BookFactory', () => {
     });
 
     test('Throws error when title is null', () => {
-      expect(() => BookFactory.create('book-7', null as any, 'Author', 'test.epub')).toThrow(
+      expect(() => BookFactory.create('book-7', null as unknown as string, 'Author', 'test.epub')).toThrow(
         'Title and author are required to create a book.',
       );
     });
 
     test('Throws error when author is null', () => {
-      expect(() => BookFactory.create('book-8', 'Title', null as any, 'test.epub')).toThrow(
+      expect(() => BookFactory.create('book-8', 'Title', null as unknown as string, 'test.epub')).toThrow(
         'Title and author are required to create a book.',
       );
     });

@@ -7,10 +7,7 @@ import { JwtAuthGuard } from 'src/infrastructure/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/infrastructure/guards/roles.guard';
 
 @Module({
-  imports: [
-    PassportModule,
-    JwtModule.register({}),
-  ],
+  imports: [PassportModule, JwtModule.register({})],
   providers: [
     {
       provide: 'TokenGateway',

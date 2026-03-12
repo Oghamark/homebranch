@@ -14,8 +14,14 @@ jest.mock('epub2', () => {
   };
 });
 
+interface MockEpub {
+  metadata: Record<string, unknown>;
+  manifest: Record<string, { id?: string; 'media-type'?: string }>;
+  getImageAsync: jest.Mock;
+}
+
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const epub2 = require('epub2');
+const epub2 = require('epub2') as { __mockEpub: MockEpub };
 const mockEpub = epub2.__mockEpub;
 
 describe('EpubParserService', () => {
