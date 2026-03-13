@@ -15,6 +15,7 @@ export class GetBooksUseCase implements UseCase<GetBooksRequest, PaginationResul
     offset,
     query,
     userId,
+    viewerUserId,
     isbn,
     genre,
     series,
@@ -22,8 +23,14 @@ export class GetBooksUseCase implements UseCase<GetBooksRequest, PaginationResul
   }: GetBooksRequest): Promise<Result<PaginationResult<Book[]>>> {
     const hasFilters = query || isbn || genre || series || author;
     if (hasFilters) {
-      return await this.bookRepository.searchWithFilters({ query, isbn, genre, series, author }, limit, offset, userId);
+      return await this.bookRepository.searchWithFilters(
+        { query, isbn, genre, series, author },
+        limit,
+        offset,
+        userId,
+        viewerUserId,
+      );
     }
-    return await this.bookRepository.findAll(limit, offset, userId);
+    return await this.bookRepository.findAll(limit, offset, userId, viewerUserId);
   }
 }

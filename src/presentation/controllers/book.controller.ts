@@ -29,6 +29,7 @@ import { randomUUID } from 'crypto';
 import { basename, join } from 'path';
 import { DeleteBookRequest } from 'src/application/contracts/book/delete-book-request';
 import { GetFavoriteBooksUseCase } from 'src/application/usecases/book/get-favorite-books-use-case.service';
+import { ToggleBookFavoriteUseCase } from 'src/application/usecases/book/toggle-book-favorite-use-case.service';
 import { JwtAuthGuard } from 'src/infrastructure/guards/jwt-auth.guard';
 import { MapResultInterceptor } from '../interceptors/map_result.interceptor';
 import { DownloadBookUseCase } from 'src/application/usecases/book/download-book.usecase';
@@ -51,14 +52,15 @@ export class BookController {
     private readonly downloadBookUseCase: DownloadBookUseCase,
     private readonly fetchBookMetadataUseCase: FetchBookMetadataUseCase,
     private readonly fetchBookSummaryUseCase: FetchBookSummaryUseCase,
+    private readonly toggleBookFavoriteUseCase: ToggleBookFavoriteUseCase,
   ) {}
 
   private readonly logger = new Logger('BookController');
   @Get()
   @UseGuards(JwtAuthGuard)
-  getBooks(@Query() paginationDto: GetBooksRequest) {
+  getBooks(@Query() paginationDto: GetBooksRequest, @CurrentUser() currentUser: Express.User) {
     this.logger.log(`Getting books with title ${paginationDto.query}`);
-    return this.getBooksUseCase.execute({ ...paginationDto });
+    return this.getBooksUseCase.execute({ ...paginationDto, viewerUserId: currentUser.id });
   }
 
   @Get('favorite')
@@ -67,10 +69,16 @@ export class BookController {
     return this.getFavoriteBooksUseCase.execute({ ...paginationDto, userId: currentUser.id });
   }
 
+  @Put(':id/favorite')
+  @UseGuards(JwtAuthGuard)
+  toggleFavorite(@Param('id') id: string, @CurrentUser() currentUser: Express.User) {
+    return this.toggleBookFavoriteUseCase.execute(currentUser.id, id);
+  }
+
   @Get(`:id`)
   @UseGuards(JwtAuthGuard)
-  getBookById(@Param('id') id: string) {
-    return this.getBookByIdUseCase.execute({ id });
+  getBookById(@Param('id') id: string, @CurrentUser() currentUser: Express.User) {
+    return this.getBookByIdUseCase.execute({ id, viewerUserId: currentUser.id });
   }
 
   @Post()
