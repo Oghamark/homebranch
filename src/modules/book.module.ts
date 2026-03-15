@@ -28,7 +28,7 @@ import { SettingsModule } from 'src/modules/settings.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([BookEntity, UserBookFavoriteEntity, AuthModule, SettingsModule]),
+    TypeOrmModule.forFeature([BookEntity, UserBookFavoriteEntity]),
     BullModule.registerQueue({ name: 'file-processing' }),
     AuthModule,
     SettingsModule,

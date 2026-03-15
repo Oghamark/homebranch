@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BullModule } from '@nestjs/bullmq';
 import { BookEntity } from 'src/infrastructure/database/book.entity';
+import { UserBookFavoriteEntity } from 'src/infrastructure/database/user-book-favorite.entity';
 import { TypeOrmBookRepository } from 'src/infrastructure/repositories/book.repository';
 import { ContentHashService } from 'src/infrastructure/services/content-hash.service';
 import { EpubMetadataWriterService } from 'src/infrastructure/services/epub-metadata-writer.service';
@@ -20,7 +21,7 @@ import { SettingsModule } from 'src/modules/settings.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([BookEntity]),
+    TypeOrmModule.forFeature([BookEntity, UserBookFavoriteEntity]),
     BullModule.registerQueue({ name: 'library-scan' }, { name: 'file-processing' }),
     AuthModule,
     SettingsModule,
