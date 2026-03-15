@@ -13,7 +13,13 @@ export interface BookSearchFilters {
 }
 
 export interface IBookRepository extends IRepository<Book> {
-  findAll(limit?: number, offset?: number, userId?: string): Promise<Result<PaginationResult<Book[]>>>;
+  findAll(
+    limit?: number,
+    offset?: number,
+    userId?: string,
+    viewerUserId?: string,
+  ): Promise<Result<PaginationResult<Book[]>>>;
+  findById(id: string, viewerUserId?: string): Promise<Result<Book>>;
   findByAuthor(
     authorId: string,
     limit?: number,
@@ -47,6 +53,7 @@ export interface IBookRepository extends IRepository<Book> {
     limit?: number,
     offset?: number,
     userId?: string,
+    viewerUserId?: string,
   ): Promise<Result<PaginationResult<Book[]>>>;
   searchFavoritesWithFilters(
     filters: BookSearchFilters,
@@ -54,6 +61,7 @@ export interface IBookRepository extends IRepository<Book> {
     offset?: number,
     userId?: string,
   ): Promise<Result<PaginationResult<Book[]>>>;
+  toggleFavorite(userId: string, bookId: string): Promise<Result<{ isFavorite: boolean }>>;
   findBooksWithoutMetadata(limit: number): Promise<Result<Book[]>>;
   findNewArrivals(limit?: number, offset?: number): Promise<Result<PaginationResult<Book[]>>>;
   findByFileName(fileName: string, includeDeleted?: boolean): Promise<Result<Book>>;

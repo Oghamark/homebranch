@@ -38,7 +38,7 @@ describe('GetBookByIdUseCase', () => {
     const result = await useCase.execute({ id: mockBook.id });
 
     expect(bookRepository.findById).toHaveBeenCalledTimes(1);
-    expect(bookRepository.findById).toHaveBeenCalledWith(mockBook.id);
+    expect(bookRepository.findById).toHaveBeenCalledWith(mockBook.id, undefined);
     expect(result.isSuccess()).toBe(true);
     expect(result.value).toEqual(mockBook);
   });
@@ -49,7 +49,7 @@ describe('GetBookByIdUseCase', () => {
     const result = await useCase.execute({ id: 'non-existent-id' });
 
     expect(bookRepository.findById).toHaveBeenCalledTimes(1);
-    expect(bookRepository.findById).toHaveBeenCalledWith('non-existent-id');
+    expect(bookRepository.findById).toHaveBeenCalledWith('non-existent-id', undefined);
     expect(result.isFailure()).toBe(true);
     expect(result.failure).toEqual(bookNotFoundFailure);
   });

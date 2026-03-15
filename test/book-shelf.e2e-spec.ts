@@ -37,6 +37,7 @@ describe('BookShelfController (e2e)', () => {
     author: 'Author',
     fileName: 'test.epub',
     isFavorite: false,
+    genres: [],
   };
 
   const mockGetBookShelvesUseCase = { execute: jest.fn() };

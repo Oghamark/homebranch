@@ -2,6 +2,7 @@ import { Logger, Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BookEntity } from 'src/infrastructure/database/book.entity';
+import { UserBookFavoriteEntity } from 'src/infrastructure/database/user-book-favorite.entity';
 import { SnakeNamingStrategy } from 'typeorm-naming-strategies';
 import { BookShelfEntity } from '../infrastructure/database/book-shelf.entity';
 import { SavedPositionEntity } from '../infrastructure/database/saved-position.entity';
@@ -20,6 +21,7 @@ import { AddCreatedByUserIdToBookShelf1772317868306 } from '../migrations/177231
 import { AddBookMetadataFields1772395519432 } from '../migrations/1772395519432-AddBookMetadataFields';
 import { CreateSettingTable1772669702941 } from 'src/migrations/1772669702941-CreateSettingTable';
 import { AddCreatedAtToBook1772681032915 } from 'src/migrations/1772681032915-AddCreatedAtToBook';
+import { AddUserBookFavoriteTable1773439568621 } from 'src/migrations/1773439568621-AddUserBookFavoriteTable';
 import { AddSyncAndSoftDeleteFields1773287271444 } from 'src/migrations/1773287271444-AddSyncAndSoftDeleteFields';
 
 @Module({
@@ -50,7 +52,14 @@ import { AddSyncAndSoftDeleteFields1773287271444 } from 'src/migrations/17732872
           username: username,
           password: password,
           database: database,
-          entities: [BookEntity, BookShelfEntity, SavedPositionEntity, AuthorEntity, SettingEntity],
+          entities: [
+            BookEntity,
+            BookShelfEntity,
+            SavedPositionEntity,
+            AuthorEntity,
+            SettingEntity,
+            UserBookFavoriteEntity,
+          ],
           migrations: [
             SchemaUpdate1755566512418,
             AddUserAndRoleTables1739836800000,
@@ -65,6 +74,7 @@ import { AddSyncAndSoftDeleteFields1773287271444 } from 'src/migrations/17732872
             AddBookMetadataFields1772395519432,
             CreateSettingTable1772669702941,
             AddCreatedAtToBook1772681032915,
+            AddUserBookFavoriteTable1773439568621,
             AddSyncAndSoftDeleteFields1773287271444,
           ],
           migrationsRun: true,

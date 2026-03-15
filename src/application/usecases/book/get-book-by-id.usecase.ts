@@ -10,7 +10,10 @@ import { PaginatedQuery } from 'src/core/paginated-query';
 export class GetBookByIdUseCase implements UseCase<GetBookByIdRequest & PaginatedQuery, Book> {
   constructor(@Inject('BookRepository') private bookRepository: IBookRepository) {}
 
-  async execute({ id }: GetBookByIdRequest & PaginatedQuery): Promise<Result<Book>> {
-    return await this.bookRepository.findById(id);
+  async execute({
+    id,
+    viewerUserId,
+  }: GetBookByIdRequest & PaginatedQuery & { viewerUserId?: string }): Promise<Result<Book>> {
+    return await this.bookRepository.findById(id, viewerUserId);
   }
 }

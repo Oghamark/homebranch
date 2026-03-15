@@ -9,7 +9,9 @@ import { GetBooksUseCase } from 'src/application/usecases/book/get-books.usecase
 import { GetFavoriteBooksUseCase } from 'src/application/usecases/book/get-favorite-books-use-case.service';
 import { UpdateBookUseCase } from 'src/application/usecases/book/update-book.usecase';
 import { AssignBookOwnerUseCase } from 'src/application/usecases/book/assign-book-owner.usecase';
+import { ToggleBookFavoriteUseCase } from 'src/application/usecases/book/toggle-book-favorite-use-case.service';
 import { BookEntity } from 'src/infrastructure/database/book.entity';
+import { UserBookFavoriteEntity } from 'src/infrastructure/database/user-book-favorite.entity';
 import { BookMapper } from 'src/infrastructure/mappers/book.mapper';
 import { TypeOrmBookRepository } from 'src/infrastructure/repositories/book.repository';
 import { BookController } from 'src/presentation/controllers/book.controller';
@@ -26,7 +28,7 @@ import { SettingsModule } from 'src/modules/settings.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([BookEntity]),
+    TypeOrmModule.forFeature([BookEntity, UserBookFavoriteEntity, AuthModule, SettingsModule]),
     BullModule.registerQueue({ name: 'file-processing' }),
     AuthModule,
     SettingsModule,
@@ -47,6 +49,7 @@ import { SettingsModule } from 'src/modules/settings.module';
     GetBookByIdUseCase,
     UpdateBookUseCase,
     AssignBookOwnerUseCase,
+    ToggleBookFavoriteUseCase,
     FetchBookMetadataUseCase,
     FetchBookSummaryUseCase,
     // ... other use cases

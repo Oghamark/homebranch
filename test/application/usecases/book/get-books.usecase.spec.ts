@@ -48,7 +48,7 @@ describe('GetBooksUseCase', () => {
     const result = await useCase.execute({ limit: 10, offset: 0, userId: 'user-123' });
 
     expect(bookRepository.findAll).toHaveBeenCalledTimes(1);
-    expect(bookRepository.findAll).toHaveBeenCalledWith(10, 0, 'user-123');
+    expect(bookRepository.findAll).toHaveBeenCalledWith(10, 0, 'user-123', undefined);
     expect(result.isSuccess()).toBe(true);
     expect(result.value).toEqual(paginationResult);
   });
@@ -72,6 +72,7 @@ describe('GetBooksUseCase', () => {
       10,
       0,
       'user-123',
+      undefined,
     );
     expect(bookRepository.findAll).not.toHaveBeenCalled();
     expect(result.isSuccess()).toBe(true);
@@ -97,6 +98,7 @@ describe('GetBooksUseCase', () => {
       10,
       0,
       'user-123',
+      undefined,
     );
     expect(bookRepository.findAll).not.toHaveBeenCalled();
     expect(result.isSuccess()).toBe(true);
@@ -120,6 +122,7 @@ describe('GetBooksUseCase', () => {
       10,
       0,
       'user-123',
+      undefined,
     );
     expect(result.isSuccess()).toBe(true);
   });
