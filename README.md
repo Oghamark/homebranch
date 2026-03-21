@@ -33,7 +33,7 @@ It provides a user-friendly interface to organize, search, and read your ebooks 
 
 ## Features
 
-- Book management with file upload (EPUB)
+- Book management with file upload (EPUB) — uploaded files are saved as `Author - Title.epub`
 - Automatic metadata enrichment from Open Library (genres, publisher, language, ratings, summary, ISBN, page count)
 - Optional Google Books enrichment for series info and any fields Open Library didn't populate
 - Bookshelves (collections) with many-to-many book relationships
@@ -45,6 +45,7 @@ It provides a user-friendly interface to organize, search, and read your ebooks 
 - Automated library scanning — detects new, modified, and removed EPUB files in the uploads directory
 - Bidirectional metadata sync: three-way merge between the EPUB file, database, and last-synced snapshot (file wins on conflict); updated database metadata is written back to the EPUB file
 - Soft delete when a file is removed; automatically restored when the file is re-added (matched by filename or content hash)
+- Book deduplication — admins can scan the library for duplicate EPUB files and resolve each pair
 - Background job queues powered by BullMQ and Redis for reliable async processing
 - Real-time Server-Sent Events (SSE) at `GET /library/events` — notifies connected clients of library changes so they can refetch without polling
 - Job history API (`GET /jobs`, `GET /jobs/:id`) with manual scan trigger (`POST /library/scan`) and per-book sync (`POST /library/books/:id/sync`)
