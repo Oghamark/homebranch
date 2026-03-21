@@ -42,6 +42,11 @@ async function bootstrap() {
     logger.warn(`Author images directory "${authorImagesDirectory}" does not exist. Creating it...`);
     mkdirSync(authorImagesDirectory, { recursive: true });
   }
+  const incomingDirectory = join(uploadsDirectory, 'incoming');
+  if (!existsSync(incomingDirectory)) {
+    logger.warn(`Incoming directory "${incomingDirectory}" does not exist. Creating it...`);
+    mkdirSync(incomingDirectory, { recursive: true });
+  }
   app.use('/uploads/cover-images', express.static(resolve(coverImagesDirectory)));
   app.use('/uploads/author-images', express.static(resolve(authorImagesDirectory)));
   await app.listen(port);

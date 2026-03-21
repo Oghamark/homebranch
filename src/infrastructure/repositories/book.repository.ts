@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { IBookRepository, BookSearchFilters } from 'src/application/interfaces/book-repository';
+import { BookSearchFilters, IBookRepository } from 'src/application/interfaces/book-repository';
 import { IsNull, Repository } from 'typeorm';
 import { BookEntity } from 'src/infrastructure/database/book.entity';
 import { UserBookFavoriteEntity } from 'src/infrastructure/database/user-book-favorite.entity';
@@ -33,7 +33,7 @@ export class TypeOrmBookRepository implements IBookRepository {
     viewerUserId?: string,
   ): Promise<Result<PaginationResult<Book[]>>> {
     const [bookEntities, total] = await this.repository.findAndCount({
-      where: userId ? { uploadedByUserId: userId } : {},
+      where: userId ? { uploadedByUserId: userId, deletedAt: IsNull() } : { deletedAt: IsNull() },
       order: { author: 'ASC', title: 'ASC' },
       take: limit,
       skip: offset,
@@ -54,7 +54,7 @@ export class TypeOrmBookRepository implements IBookRepository {
   }
 
   async findById(id: string, viewerUserId?: string): Promise<Result<Book>> {
-    const bookEntity = (await this.repository.findOne({ where: { id } })) || null;
+    const bookEntity = (await this.repository.findOne({ where: { id, deletedAt: IsNull() } })) || null;
     if (!bookEntity) return Result.fail(new BookNotFoundFailure());
     const book = BookMapper.toDomain(bookEntity);
     if (viewerUserId) {
@@ -73,6 +73,7 @@ export class TypeOrmBookRepository implements IBookRepository {
       .innerJoin('book.bookShelves', 'shelf', 'shelf.id = :shelfId', {
         shelfId: bookShelf.id,
       })
+      .where('book.deletedAt IS NULL')
       .orderBy('book.author', 'ASC')
       .addOrderBy('book.title', 'ASC')
       .take(limit)
@@ -99,26 +100,113 @@ export class TypeOrmBookRepository implements IBookRepository {
   }
 
   async delete(id: string): Promise<Result<Book>> {
-    const findBookResult = await this.findById(id);
-    if (!findBookResult.isSuccess()) {
-      return Result.fail(new BookNotFoundFailure());
-    }
+    return this.softDelete(id);
+  }
 
-    const book = findBookResult.value;
-    if (existsSync(`${process.env.UPLOADS_DIRECTORY || join(process.cwd(), 'uploads')}/books/${book.fileName}`)) {
-      unlinkSync(`${process.env.UPLOADS_DIRECTORY || join(process.cwd(), 'uploads')}/books/${book.fileName}`);
+  async permanentDelete(id: string): Promise<Result<Book>> {
+    const bookEntity = await this.repository.findOne({ where: { id } });
+    if (!bookEntity) return Result.fail(new BookNotFoundFailure());
+
+    const book = BookMapper.toDomain(bookEntity);
+    const uploadsDir = process.env.UPLOADS_DIRECTORY || join(process.cwd(), 'uploads');
+    if (existsSync(join(uploadsDir, 'books', book.fileName))) {
+      unlinkSync(join(uploadsDir, 'books', book.fileName));
     }
-    if (
-      existsSync(
-        `${process.env.UPLOADS_DIRECTORY || join(process.cwd(), 'uploads')}/cover-images/${book.coverImageFileName}`,
-      )
-    ) {
-      unlinkSync(
-        `${process.env.UPLOADS_DIRECTORY || join(process.cwd(), 'uploads')}/cover-images/${book.coverImageFileName}`,
-      );
+    if (book.coverImageFileName && existsSync(join(uploadsDir, 'cover-images', book.coverImageFileName))) {
+      unlinkSync(join(uploadsDir, 'cover-images', book.coverImageFileName));
     }
     await this.repository.delete(id);
     return Result.ok(book);
+  }
+
+  async softDelete(id: string): Promise<Result<Book>> {
+    const bookEntity = await this.repository.findOne({ where: { id, deletedAt: IsNull() } });
+    if (!bookEntity) return Result.fail(new BookNotFoundFailure());
+
+    bookEntity.deletedAt = new Date();
+    await this.repository.save(bookEntity);
+    return Result.ok(BookMapper.toDomain(bookEntity));
+  }
+
+  async restore(id: string): Promise<Result<Book>> {
+    const bookEntity = await this.repository.findOne({ where: { id } });
+    if (!bookEntity) return Result.fail(new BookNotFoundFailure());
+
+    // Must use null (not undefined) — TypeORM omits undefined fields from the UPDATE,
+    // leaving deleted_at unchanged in the database.
+    bookEntity.deletedAt = null as unknown as undefined;
+    await this.repository.save(bookEntity);
+    return Result.ok(BookMapper.toDomain(bookEntity));
+  }
+
+  async findByFileName(fileName: string, includeDeleted = false): Promise<Result<Book>> {
+    const where = includeDeleted ? { fileName } : { fileName, deletedAt: IsNull() };
+    const bookEntity = await this.repository.findOne({ where });
+    if (bookEntity) return Result.ok(BookMapper.toDomain(bookEntity));
+    return Result.fail(new BookNotFoundFailure());
+  }
+
+  async findByContentHash(hash: string, includeDeleted = false): Promise<Result<Book>> {
+    const where = includeDeleted ? { fileContentHash: hash } : { fileContentHash: hash, deletedAt: IsNull() };
+    const bookEntity = await this.repository.findOne({ where });
+    if (bookEntity) return Result.ok(BookMapper.toDomain(bookEntity));
+    return Result.fail(new BookNotFoundFailure());
+  }
+
+  async findAllActive(): Promise<Result<Book[]>> {
+    const bookEntities = await this.repository.find({ where: { deletedAt: IsNull() } });
+    return Result.ok(BookMapper.toDomainList(bookEntities));
+  }
+
+  async updateContentHash(id: string, hash: string): Promise<Result<void>> {
+    await this.repository.update({ id }, { fileContentHash: hash });
+    return Result.ok(undefined);
+  }
+
+  async findUnowned(limit?: number, offset?: number): Promise<Result<PaginationResult<Book[]>>> {
+    const [bookEntities, total] = await this.repository.findAndCount({
+      where: { uploadedByUserId: IsNull(), deletedAt: IsNull() },
+      order: { title: 'ASC' },
+      take: limit,
+      skip: offset,
+    });
+    return Result.ok({
+      data: BookMapper.toDomainList(bookEntities),
+      limit,
+      offset,
+      total,
+      nextCursor: null,
+    });
+  }
+
+  async findOrphaned(
+    knownUserIds: string[],
+    limit?: number,
+    offset?: number,
+  ): Promise<Result<PaginationResult<Book[]>>> {
+    const qb = this.repository
+      .createQueryBuilder('book')
+      .where('book.deletedAt IS NULL')
+      .andWhere('book.uploadedByUserId IS NOT NULL');
+
+    if (knownUserIds.length > 0) {
+      qb.andWhere('book.uploadedByUserId NOT IN (:...knownUserIds)', { knownUserIds });
+    }
+
+    qb.orderBy('book.title', 'ASC');
+
+    const total = await qb.getCount();
+    if (limit !== undefined) qb.take(limit);
+    if (offset !== undefined) qb.skip(offset);
+
+    const bookEntities = await qb.getMany();
+    return Result.ok({
+      data: BookMapper.toDomainList(bookEntities),
+      limit,
+      offset,
+      total,
+      nextCursor: null,
+    });
   }
 
   async findByAuthor(
@@ -128,7 +216,7 @@ export class TypeOrmBookRepository implements IBookRepository {
     userId?: string,
   ): Promise<Result<PaginationResult<Book[]>>> {
     const [bookEntities, total] = await this.repository.findAndCount({
-      where: userId ? { author, uploadedByUserId: userId } : { author },
+      where: userId ? { author, uploadedByUserId: userId, deletedAt: IsNull() } : { author, deletedAt: IsNull() },
       order: { title: 'ASC' },
       take: limit,
       skip: offset,
@@ -145,6 +233,7 @@ export class TypeOrmBookRepository implements IBookRepository {
   async findFavorites(limit?: number, offset?: number, userId?: string): Promise<Result<PaginationResult<Book[]>>> {
     const qb = this.repository
       .createQueryBuilder('book')
+      .where('book.deletedAt IS NULL')
       .innerJoin('user_book_favorite', 'fav', 'fav.book_id = book.id AND fav.user_id = :userId', { userId });
     const [bookEntities, total] = await qb
       .orderBy('book.author', 'ASC')
@@ -166,7 +255,7 @@ export class TypeOrmBookRepository implements IBookRepository {
   }
 
   async findByTitle(title: string): Promise<Result<Book>> {
-    const bookEntity = (await this.repository.findOne({ where: { title } })) || null;
+    const bookEntity = (await this.repository.findOne({ where: { title, deletedAt: IsNull() } })) || null;
     if (bookEntity) return Result.ok(BookMapper.toDomain(bookEntity));
     return Result.fail(new BookNotFoundFailure());
   }
@@ -179,7 +268,8 @@ export class TypeOrmBookRepository implements IBookRepository {
   ): Promise<Result<PaginationResult<Book[]>>> {
     const queryBuilder = this.repository
       .createQueryBuilder('book')
-      .where('LOWER(book.title) LIKE LOWER(:title)', { title: `%${title}%` });
+      .where('LOWER(book.title) LIKE LOWER(:title)', { title: `%${title}%` })
+      .andWhere('book.deletedAt IS NULL');
 
     if (userId) {
       queryBuilder.andWhere('book.uploadedByUserId = :userId', { userId });
@@ -210,7 +300,13 @@ export class TypeOrmBookRepository implements IBookRepository {
     const queryBuilder = this.repository
       .createQueryBuilder('book')
       .innerJoin('user_book_favorite', 'fav', 'fav.book_id = book.id AND fav.user_id = :userId', { userId })
-      .where('LOWER(book.title) LIKE LOWER(:title)', { title: `%${title}%` });
+      .where('LOWER(book.title) LIKE LOWER(:title)', { title: `%${title}%` })
+      .andWhere('book.isFavorite = true')
+      .andWhere('book.deletedAt IS NULL');
+
+    if (userId) {
+      queryBuilder.andWhere('book.uploadedByUserId = :userId', { userId });
+    }
 
     const [bookEntities, total] = await queryBuilder
       .orderBy('book.author', 'ASC')
@@ -242,7 +338,8 @@ export class TypeOrmBookRepository implements IBookRepository {
     const qb = this.repository
       .createQueryBuilder('book')
       .where('book.author = :author', { author })
-      .andWhere('LOWER(book.title) LIKE LOWER(:title)', { title: `%${title}%` });
+      .andWhere('LOWER(book.title) LIKE LOWER(:title)', { title: `%${title}%` })
+      .andWhere('book.deletedAt IS NULL');
 
     if (userId) {
       qb.andWhere('book.uploadedByUserId = :userId', { userId });
@@ -284,7 +381,7 @@ export class TypeOrmBookRepository implements IBookRepository {
     userId?: string,
     viewerUserId?: string,
   ): Promise<Result<PaginationResult<Book[]>>> {
-    const qb = this.repository.createQueryBuilder('book');
+    const qb = this.repository.createQueryBuilder('book').where('book.deletedAt IS NULL');
     this.applySearchFilters(qb, filters);
     if (userId) {
       qb.andWhere('book.uploadedByUserId = :userId', { userId });
@@ -316,6 +413,8 @@ export class TypeOrmBookRepository implements IBookRepository {
   ): Promise<Result<PaginationResult<Book[]>>> {
     const qb = this.repository
       .createQueryBuilder('book')
+      .where('book.isFavorite = true')
+      .andWhere('book.deletedAt IS NULL')
       .innerJoin('user_book_favorite', 'fav', 'fav.book_id = book.id AND fav.user_id = :userId', { userId });
     this.applySearchFilters(qb, filters);
     const [bookEntities, total] = await qb
@@ -364,7 +463,7 @@ export class TypeOrmBookRepository implements IBookRepository {
 
   async findBooksWithoutMetadata(limit: number): Promise<Result<Book[]>> {
     const bookEntities = await this.repository.find({
-      where: { metadataFetchedAt: IsNull() },
+      where: { metadataFetchedAt: IsNull(), deletedAt: IsNull() },
       take: limit,
       order: { title: 'ASC' },
     });
@@ -373,6 +472,7 @@ export class TypeOrmBookRepository implements IBookRepository {
 
   async findNewArrivals(limit?: number, offset?: number): Promise<Result<PaginationResult<Book[]>>> {
     const [bookEntities, total] = await this.repository.findAndCount({
+      where: { deletedAt: IsNull() },
       order: { createdAt: 'DESC' },
       take: limit,
       skip: offset,

@@ -22,6 +22,12 @@ export class BookFactory {
     ratingsCount?: number,
     metadataFetchedAt?: Date,
     createdAt?: Date,
+    deletedAt?: Date,
+    lastSyncedAt?: Date,
+    syncedMetadata?: Record<string, unknown>,
+    fileMtime?: number,
+    fileContentHash?: string,
+    metadataUpdatedAt?: Date,
   ): Book {
     if (!title || !author) {
       throw new Error('Title and author are required to create a book.');
@@ -48,6 +54,12 @@ export class BookFactory {
       ratingsCount,
       metadataFetchedAt,
       createdAt,
+      deletedAt,
+      lastSyncedAt,
+      syncedMetadata,
+      fileMtime,
+      fileContentHash,
+      metadataUpdatedAt,
     );
   }
 
@@ -73,6 +85,12 @@ export class BookFactory {
       overrides.ratingsCount ?? book.ratingsCount,
       overrides.metadataFetchedAt ?? book.metadataFetchedAt,
       overrides.createdAt ?? book.createdAt,
+      overrides.deletedAt ?? book.deletedAt,
+      overrides.lastSyncedAt ?? book.lastSyncedAt,
+      overrides.syncedMetadata ?? book.syncedMetadata,
+      overrides.fileMtime ?? book.fileMtime,
+      overrides.fileContentHash ?? book.fileContentHash,
+      overrides.metadataUpdatedAt ?? book.metadataUpdatedAt,
     );
   }
 }

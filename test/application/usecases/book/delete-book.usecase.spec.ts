@@ -35,7 +35,7 @@ describe('DeleteBookUseCase', () => {
 
   test('Successfully deletes a book when requested by the owner', async () => {
     bookRepository.findById.mockResolvedValueOnce(Result.ok(mockBook));
-    bookRepository.delete.mockResolvedValueOnce(Result.ok(mockBook));
+    bookRepository.permanentDelete.mockResolvedValueOnce(Result.ok(mockBook));
 
     const result = await useCase.execute({
       id: mockBook.id,
@@ -45,15 +45,15 @@ describe('DeleteBookUseCase', () => {
 
     expect(bookRepository.findById).toHaveBeenCalledTimes(1);
     expect(bookRepository.findById).toHaveBeenCalledWith(mockBook.id);
-    expect(bookRepository.delete).toHaveBeenCalledTimes(1);
-    expect(bookRepository.delete).toHaveBeenCalledWith(mockBook.id);
+    expect(bookRepository.permanentDelete).toHaveBeenCalledTimes(1);
+    expect(bookRepository.permanentDelete).toHaveBeenCalledWith(mockBook.id);
     expect(result.isSuccess()).toBe(true);
     expect(result.value).toEqual(mockBook);
   });
 
   test('Successfully deletes a book when requested by an admin', async () => {
     bookRepository.findById.mockResolvedValueOnce(Result.ok(mockBook));
-    bookRepository.delete.mockResolvedValueOnce(Result.ok(mockBook));
+    bookRepository.permanentDelete.mockResolvedValueOnce(Result.ok(mockBook));
 
     const result = await useCase.execute({
       id: mockBook.id,
@@ -61,7 +61,7 @@ describe('DeleteBookUseCase', () => {
       requestingUserRole: 'ADMIN',
     });
 
-    expect(bookRepository.delete).toHaveBeenCalledTimes(1);
+    expect(bookRepository.permanentDelete).toHaveBeenCalledTimes(1);
     expect(result.isSuccess()).toBe(true);
   });
 
@@ -75,14 +75,14 @@ describe('DeleteBookUseCase', () => {
     });
 
     expect(bookRepository.findById).toHaveBeenCalledTimes(1);
-    expect(bookRepository.delete).not.toHaveBeenCalled();
+    expect(bookRepository.permanentDelete).not.toHaveBeenCalled();
     expect(result.isFailure()).toBe(true);
     expect(result.failure).toEqual(deleteBookForbiddenFailure);
   });
 
   test('Successfully deletes a book without an owner when requested by any user', async () => {
     bookRepository.findById.mockResolvedValueOnce(Result.ok(mockBookFavorite));
-    bookRepository.delete.mockResolvedValueOnce(Result.ok(mockBookFavorite));
+    bookRepository.permanentDelete.mockResolvedValueOnce(Result.ok(mockBookFavorite));
 
     const result = await useCase.execute({
       id: mockBookFavorite.id,
@@ -90,7 +90,7 @@ describe('DeleteBookUseCase', () => {
       requestingUserRole: 'USER',
     });
 
-    expect(bookRepository.delete).toHaveBeenCalledTimes(1);
+    expect(bookRepository.permanentDelete).toHaveBeenCalledTimes(1);
     expect(result.isSuccess()).toBe(true);
   });
 
@@ -105,7 +105,7 @@ describe('DeleteBookUseCase', () => {
 
     expect(bookRepository.findById).toHaveBeenCalledTimes(1);
     expect(bookRepository.findById).toHaveBeenCalledWith('non-existent-id');
-    expect(bookRepository.delete).not.toHaveBeenCalled();
+    expect(bookRepository.permanentDelete).not.toHaveBeenCalled();
     expect(result.isFailure()).toBe(true);
     expect(result.failure).toEqual(bookNotFoundFailure);
   });

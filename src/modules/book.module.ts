@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { BullModule } from '@nestjs/bullmq';
 import { CreateBookUseCase } from 'src/application/usecases/book/create-book.usecase';
 import { DeleteBookUseCase } from 'src/application/usecases/book/delete-book.usecase';
 import { DownloadBookUseCase } from 'src/application/usecases/book/download-book.usecase';
@@ -7,12 +8,22 @@ import { GetBookByIdUseCase } from 'src/application/usecases/book/get-book-by-id
 import { GetBooksUseCase } from 'src/application/usecases/book/get-books.usecase';
 import { GetFavoriteBooksUseCase } from 'src/application/usecases/book/get-favorite-books-use-case.service';
 import { UpdateBookUseCase } from 'src/application/usecases/book/update-book.usecase';
+import { AssignBookOwnerUseCase } from 'src/application/usecases/book/assign-book-owner.usecase';
 import { ToggleBookFavoriteUseCase } from 'src/application/usecases/book/toggle-book-favorite-use-case.service';
+import { ListDuplicatesUseCase } from 'src/application/usecases/book/list-duplicates.usecase';
+import { ResolveDuplicateUseCase } from 'src/application/usecases/book/resolve-duplicate.usecase';
+import { ScanDuplicatesUseCase } from 'src/application/usecases/book/scan-duplicates.usecase';
 import { BookEntity } from 'src/infrastructure/database/book.entity';
+import { BookDuplicateEntity } from 'src/infrastructure/database/book-duplicate.entity';
 import { UserBookFavoriteEntity } from 'src/infrastructure/database/user-book-favorite.entity';
 import { BookMapper } from 'src/infrastructure/mappers/book.mapper';
 import { TypeOrmBookRepository } from 'src/infrastructure/repositories/book.repository';
+import { TypeOrmBookDuplicateRepository } from 'src/infrastructure/repositories/book-duplicate.repository';
+import { DuplicateScanProcessor } from 'src/infrastructure/processors/duplicate-scan.processor';
+import { DuplicateScanSchedulerService } from 'src/infrastructure/schedulers/duplicate-scan-scheduler.service';
+import { ContentHashService } from 'src/infrastructure/services/content-hash.service';
 import { BookController } from 'src/presentation/controllers/book.controller';
+import { BookDuplicateController } from 'src/presentation/controllers/book-duplicate.controller';
 import { AuthModule } from 'src/modules/auth.module';
 import { OpenLibraryGateway } from 'src/infrastructure/gateways/open-library.gateway';
 import { GoogleBooksGateway } from 'src/infrastructure/gateways/google-books.gateway';
@@ -25,15 +36,24 @@ import { EpubParserService } from 'src/infrastructure/parsers/epub-parser.servic
 import { SettingsModule } from 'src/modules/settings.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([BookEntity, UserBookFavoriteEntity]), AuthModule, SettingsModule],
+  imports: [
+    TypeOrmModule.forFeature([BookEntity, BookDuplicateEntity, UserBookFavoriteEntity]),
+    BullModule.registerQueue({ name: 'file-processing' }, { name: 'duplicate-scan' }),
+    AuthModule,
+    SettingsModule,
+  ],
   providers: [
-    // Repository
+    // Repositories
     {
       provide: 'BookRepository',
       useClass: TypeOrmBookRepository,
     },
+    {
+      provide: 'BookDuplicateRepository',
+      useClass: TypeOrmBookDuplicateRepository,
+    },
 
-    // Use Cases (add all that your controller uses)
+    // Use Cases
     CreateBookUseCase,
     DeleteBookUseCase,
     DownloadBookUseCase,
@@ -41,10 +61,13 @@ import { SettingsModule } from 'src/modules/settings.module';
     GetFavoriteBooksUseCase,
     GetBookByIdUseCase,
     UpdateBookUseCase,
+    AssignBookOwnerUseCase,
     ToggleBookFavoriteUseCase,
     FetchBookMetadataUseCase,
     FetchBookSummaryUseCase,
-    // ... other use cases
+    ListDuplicatesUseCase,
+    ResolveDuplicateUseCase,
+    ScanDuplicatesUseCase,
 
     // Mappers
     BookMapper,
@@ -73,10 +96,20 @@ import { SettingsModule } from 'src/modules/settings.module';
       useClass: EpubParserService,
     },
 
+    // Services
+    {
+      provide: 'ContentHashService',
+      useClass: ContentHashService,
+    },
+
     // Schedulers
     MetadataSchedulerService,
+    DuplicateScanSchedulerService,
+
+    // Processors
+    DuplicateScanProcessor,
   ],
-  controllers: [BookController],
+  controllers: [BookDuplicateController, BookController],
   exports: ['BookRepository'],
 })
 export class BooksModule {}

@@ -1,16 +1,31 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { IBookRepository } from 'src/application/interfaces/book-repository';
+import { IBookDuplicateRepository } from 'src/application/interfaces/book-duplicate-repository';
+import { IContentHashService } from 'src/application/interfaces/content-hash-service';
 import { CreateBookUseCase } from 'src/application/usecases/book/create-book.usecase';
 import { IMetadataGateway } from 'src/application/interfaces/metadata-gateway';
 import { IEpubParser } from 'src/application/interfaces/epub-parser';
 import { mock } from 'jest-mock-extended';
 import { mockBook } from 'test/mocks/bookMocks';
 import { Result, UnexpectedFailure } from 'src/core/result';
+import { BookNotFoundFailure } from 'src/domain/failures/book.failures';
 import Mocked = jest.Mocked;
+
+jest.mock('fs/promises', () => ({
+  writeFile: jest.fn().mockResolvedValue(undefined),
+  unlink: jest.fn().mockResolvedValue(undefined),
+  rename: jest.fn().mockResolvedValue(undefined),
+}));
+
+jest.mock('fs', () => ({
+  existsSync: jest.fn().mockReturnValue(false),
+}));
 
 describe('CreateBookUseCase', () => {
   let useCase: CreateBookUseCase;
   let bookRepository: Mocked<IBookRepository>;
+  let duplicateRepository: Mocked<IBookDuplicateRepository>;
+  let contentHashService: Mocked<IContentHashService>;
   let metadataGateway: Mocked<IMetadataGateway>;
   let epubParser: Mocked<IEpubParser>;
 
@@ -21,6 +36,14 @@ describe('CreateBookUseCase', () => {
         {
           provide: 'BookRepository',
           useValue: mock<IBookRepository>(),
+        },
+        {
+          provide: 'BookDuplicateRepository',
+          useValue: mock<IBookDuplicateRepository>(),
+        },
+        {
+          provide: 'ContentHashService',
+          useValue: mock<IContentHashService>(),
         },
         {
           provide: 'MetadataGateway',
@@ -35,10 +58,16 @@ describe('CreateBookUseCase', () => {
 
     useCase = module.get<CreateBookUseCase>(CreateBookUseCase);
     bookRepository = module.get('BookRepository');
+    duplicateRepository = module.get('BookDuplicateRepository');
+    contentHashService = module.get('ContentHashService');
     metadataGateway = module.get('MetadataGateway');
     epubParser = module.get('EpubParser');
     metadataGateway.enrichBook.mockResolvedValue(mockBook);
     epubParser.parse.mockResolvedValue({});
+    // Default: no duplicate found, hash computation returns a stable hash
+    bookRepository.findByContentHash.mockResolvedValue(Result.fail(new BookNotFoundFailure()));
+    contentHashService.computeHash.mockResolvedValue('abc123hash');
+    duplicateRepository.create.mockResolvedValue(Result.ok({} as any));
   });
 
   afterEach(() => {
@@ -59,6 +88,7 @@ describe('CreateBookUseCase', () => {
     });
 
     expect(result.isSuccess()).toBe(true);
+    expect(result.value?.skipped).toBe(false);
     expect(bookRepository.create).toHaveBeenCalledTimes(1);
     expect(bookRepository.create).toHaveBeenCalledWith(
       expect.objectContaining({ title: 'Test Book', author: 'Test Author' }),
@@ -80,6 +110,7 @@ describe('CreateBookUseCase', () => {
     });
 
     expect(result.isSuccess()).toBe(true);
+    expect(result.value?.skipped).toBe(false);
     expect(bookRepository.create).toHaveBeenCalledTimes(1);
 
     const calledWith = bookRepository.create.mock.calls[0][0];
@@ -170,6 +201,57 @@ describe('CreateBookUseCase', () => {
 
     expect(result.isFailure()).toBe(true);
     expect(bookRepository.create).toHaveBeenCalledTimes(1);
+  });
+
+  describe('Deduplication', () => {
+    test('Returns existing book when exact duplicate detected (same content hash + same metadata)', async () => {
+      bookRepository.findByContentHash.mockResolvedValueOnce(Result.ok(mockBook));
+
+      const result = await useCase.execute({
+        title: 'Test Book',
+        author: 'Test Author',
+        fileName: 'test-book.epub',
+        uploadedByUserId: 'user-123',
+      });
+
+      expect(result.isSuccess()).toBe(true);
+      expect(result.value?.skipped).toBe(true);
+      expect(result.value?.book).toBe(mockBook);
+      expect(bookRepository.create).not.toHaveBeenCalled();
+    });
+
+    test('Creates book and flags duplicate when same hash but different metadata', async () => {
+      const existingBook = { ...mockBook, title: 'Different Title', author: 'Different Author', isbn: undefined };
+      bookRepository.findByContentHash.mockResolvedValueOnce(Result.ok(existingBook as any));
+      bookRepository.create.mockResolvedValueOnce(Result.ok(mockBook));
+
+      const result = await useCase.execute({
+        title: 'Test Book',
+        author: 'Test Author',
+        fileName: 'test-book.epub',
+        uploadedByUserId: 'user-123',
+      });
+
+      expect(result.isSuccess()).toBe(true);
+      expect(result.value?.skipped).toBe(false);
+      expect(bookRepository.create).toHaveBeenCalledTimes(1);
+      expect(duplicateRepository.create).toHaveBeenCalledTimes(1);
+    });
+
+    test('Sets fileContentHash on new book record', async () => {
+      contentHashService.computeHash.mockResolvedValueOnce('deadbeef1234');
+      bookRepository.create.mockResolvedValueOnce(Result.ok(mockBook));
+
+      await useCase.execute({
+        title: 'Test Book',
+        author: 'Test Author',
+        fileName: 'test-book.epub',
+        uploadedByUserId: 'user-123',
+      });
+
+      const calledWith = bookRepository.create.mock.calls[0][0];
+      expect(calledWith.fileContentHash).toBe('deadbeef1234');
+    });
   });
 
   describe('EPUB metadata merge', () => {

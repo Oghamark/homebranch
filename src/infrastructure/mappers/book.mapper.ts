@@ -25,6 +25,12 @@ export class BookMapper {
       bookEntity.ratingsCount,
       bookEntity.metadataFetchedAt,
       bookEntity.createdAt,
+      bookEntity.deletedAt,
+      bookEntity.lastSyncedAt,
+      bookEntity.syncedMetadata,
+      bookEntity.fileMtime,
+      bookEntity.fileContentHash,
+      bookEntity.metadataUpdatedAt,
     );
   }
 
@@ -50,6 +56,12 @@ export class BookMapper {
       ratingsCount: book.ratingsCount,
       metadataFetchedAt: book.metadataFetchedAt,
       createdAt: book.createdAt ?? new Date(),
+      deletedAt: book.deletedAt ?? (null as unknown as undefined),
+      lastSyncedAt: book.lastSyncedAt,
+      syncedMetadata: book.syncedMetadata,
+      fileMtime: book.fileMtime,
+      fileContentHash: book.fileContentHash,
+      metadataUpdatedAt: book.metadataUpdatedAt,
     };
   }
 

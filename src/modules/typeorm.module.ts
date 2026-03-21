@@ -22,6 +22,9 @@ import { AddBookMetadataFields1772395519432 } from '../migrations/1772395519432-
 import { CreateSettingTable1772669702941 } from 'src/migrations/1772669702941-CreateSettingTable';
 import { AddCreatedAtToBook1772681032915 } from 'src/migrations/1772681032915-AddCreatedAtToBook';
 import { AddUserBookFavoriteTable1773439568621 } from 'src/migrations/1773439568621-AddUserBookFavoriteTable';
+import { AddSyncAndSoftDeleteFields1773287271444 } from 'src/migrations/1773287271444-AddSyncAndSoftDeleteFields';
+import { BookDuplicateEntity } from 'src/infrastructure/database/book-duplicate.entity';
+import { AddBookDuplicateTable1773801937488 } from 'src/migrations/1773801937488-AddBookDuplicateTable';
 
 @Module({
   imports: [
@@ -58,6 +61,7 @@ import { AddUserBookFavoriteTable1773439568621 } from 'src/migrations/1773439568
             AuthorEntity,
             SettingEntity,
             UserBookFavoriteEntity,
+            BookDuplicateEntity,
           ],
           migrations: [
             SchemaUpdate1755566512418,
@@ -73,7 +77,9 @@ import { AddUserBookFavoriteTable1773439568621 } from 'src/migrations/1773439568
             AddBookMetadataFields1772395519432,
             CreateSettingTable1772669702941,
             AddCreatedAtToBook1772681032915,
+            AddSyncAndSoftDeleteFields1773287271444,
             AddUserBookFavoriteTable1773439568621,
+            AddBookDuplicateTable1773801937488,
           ],
           migrationsRun: true,
           migrationsTableName: 'migration_table',

@@ -20,5 +20,11 @@ export class Book {
     public ratingsCount?: number,
     public metadataFetchedAt?: Date,
     public createdAt?: Date,
+    public deletedAt?: Date,
+    public lastSyncedAt?: Date,
+    public syncedMetadata?: Record<string, unknown>,
+    public fileMtime?: number,
+    public fileContentHash?: string,
+    public metadataUpdatedAt?: Date,
   ) {}
 }

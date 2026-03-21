@@ -9,6 +9,9 @@ import { HealthModule } from './modules/health.module';
 import { AuthorsModule } from './modules/author.module';
 import { SettingsModule } from './modules/settings.module';
 import { OpdsModule } from './modules/opds.module';
+import { QueueModule } from './modules/queue.module';
+import { LibrarySyncModule } from './modules/library-sync.module';
+import { JobsModule } from './modules/jobs.module';
 
 @Module({
   imports: [
@@ -22,6 +25,9 @@ import { OpdsModule } from './modules/opds.module';
 
     HealthModule,
 
+    // Queue infrastructure
+    QueueModule,
+
     // Database configuration
     TypeOrmConfigModule,
 
@@ -32,6 +38,8 @@ import { OpdsModule } from './modules/opds.module';
     AuthorsModule,
     SettingsModule,
     OpdsModule,
+    LibrarySyncModule,
+    JobsModule,
   ],
   controllers: [],
   providers: [],
