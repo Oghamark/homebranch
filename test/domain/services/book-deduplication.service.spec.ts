@@ -23,7 +23,9 @@ describe('metadataMatches', () => {
   describe('ISBN comparison (both books have ISBN)', () => {
     test('Returns true when ISBNs are identical', () => {
       const a = makeBook({ isbn: '978-3-16-148410-0' });
-      expect(metadataMatches(a, { title: 'Different Title', author: 'Different Author', isbn: '978-3-16-148410-0' })).toBe(true);
+      expect(
+        metadataMatches(a, { title: 'Different Title', author: 'Different Author', isbn: '978-3-16-148410-0' }),
+      ).toBe(true);
     });
 
     test('Returns false when ISBNs differ', () => {

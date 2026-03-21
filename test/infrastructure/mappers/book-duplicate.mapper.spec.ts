@@ -16,7 +16,14 @@ const mockDuplicateEntity: BookDuplicateEntity = {
   resolution: undefined,
   resolvedByUserId: undefined,
   suspectBook: mockBookEntity,
-  originalBook: { ...mockBookEntity, id: mockBookFavorite.id, title: mockBookFavorite.title, author: mockBookFavorite.author, fileName: mockBookFavorite.fileName, isFavorite: true },
+  originalBook: {
+    ...mockBookEntity,
+    id: mockBookFavorite.id,
+    title: mockBookFavorite.title,
+    author: mockBookFavorite.author,
+    fileName: mockBookFavorite.fileName,
+    isFavorite: true,
+  },
 };
 
 const mockResolvedEntity: BookDuplicateEntity = {

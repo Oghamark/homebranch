@@ -3,6 +3,7 @@ import { mock } from 'jest-mock-extended';
 import { DuplicateScanProcessor } from 'src/infrastructure/processors/duplicate-scan.processor';
 import { IBookRepository } from 'src/application/interfaces/book-repository';
 import { IBookDuplicateRepository } from 'src/application/interfaces/book-duplicate-repository';
+import { IContentHashService } from 'src/application/interfaces/content-hash-service';
 import { Result } from 'src/core/result';
 import { Book } from 'src/domain/entities/book.entity';
 import { BookDuplicate } from 'src/domain/entities/book-duplicate.entity';
@@ -56,11 +57,17 @@ describe('DuplicateScanProcessor', () => {
   let processor: DuplicateScanProcessor;
   let bookRepository: Mocked<IBookRepository>;
   let duplicateRepository: Mocked<IBookDuplicateRepository>;
+  let contentHashService: Mocked<IContentHashService>;
 
   beforeEach(() => {
     bookRepository = mock<IBookRepository>();
     duplicateRepository = mock<IBookDuplicateRepository>();
-    processor = new DuplicateScanProcessor(bookRepository, duplicateRepository);
+    contentHashService = mock<IContentHashService>();
+    // Default: return HASH_A (books already set to HASH_A see no change; tests that
+    // need HASH_B override per-call with mockResolvedValueOnce)
+    contentHashService.computeHash.mockResolvedValue(HASH_A);
+    bookRepository.updateContentHash.mockResolvedValue(Result.ok(undefined));
+    processor = new DuplicateScanProcessor(bookRepository, duplicateRepository, contentHashService);
   });
 
   afterEach(() => {
@@ -92,19 +99,33 @@ describe('DuplicateScanProcessor', () => {
     expect(duplicateRepository.create).not.toHaveBeenCalled();
   });
 
-  test('Does not flag pairs where metadata matches (exact duplicates)', async () => {
+  test('Flags pairs with same hash and same metadata as potential duplicates', async () => {
     const bookA = makeBook({ id: 'book-a', title: 'Same Title', author: 'Same Author', fileContentHash: HASH_A });
     const bookB = makeBook({ id: 'book-b', title: 'Same Title', author: 'Same Author', fileContentHash: HASH_A });
     bookRepository.findAllActive.mockResolvedValueOnce(Result.ok([bookA, bookB]));
+    duplicateRepository.findByBookIds.mockResolvedValue(Result.fail(new BookDuplicateNotFoundFailure()));
+    duplicateRepository.create.mockResolvedValueOnce(Result.ok({} as BookDuplicate));
 
     await processor.process(scanJob);
 
-    expect(duplicateRepository.create).not.toHaveBeenCalled();
+    expect(duplicateRepository.create).toHaveBeenCalledTimes(1);
   });
 
   test('Flags pairs with same hash but different metadata', async () => {
-    const bookA = makeBook({ id: 'book-a', title: 'Title One', author: 'Author', fileContentHash: HASH_A, createdAt: new Date('2026-01-01') });
-    const bookB = makeBook({ id: 'book-b', title: 'Title Two', author: 'Author', fileContentHash: HASH_A, createdAt: new Date('2026-01-02') });
+    const bookA = makeBook({
+      id: 'book-a',
+      title: 'Title One',
+      author: 'Author',
+      fileContentHash: HASH_A,
+      createdAt: new Date('2026-01-01'),
+    });
+    const bookB = makeBook({
+      id: 'book-b',
+      title: 'Title Two',
+      author: 'Author',
+      fileContentHash: HASH_A,
+      createdAt: new Date('2026-01-02'),
+    });
     bookRepository.findAllActive.mockResolvedValueOnce(Result.ok([bookA, bookB]));
     duplicateRepository.findByBookIds.mockResolvedValue(Result.fail(new BookDuplicateNotFoundFailure()));
     duplicateRepository.create.mockResolvedValueOnce(Result.ok({} as BookDuplicate));
@@ -115,8 +136,20 @@ describe('DuplicateScanProcessor', () => {
   });
 
   test('Newer book is the suspect', async () => {
-    const older = makeBook({ id: 'old-book', title: 'Title A', author: 'Author', fileContentHash: HASH_A, createdAt: new Date('2026-01-01') });
-    const newer = makeBook({ id: 'new-book', title: 'Title B', author: 'Author', fileContentHash: HASH_A, createdAt: new Date('2026-06-01') });
+    const older = makeBook({
+      id: 'old-book',
+      title: 'Title A',
+      author: 'Author',
+      fileContentHash: HASH_A,
+      createdAt: new Date('2026-01-01'),
+    });
+    const newer = makeBook({
+      id: 'new-book',
+      title: 'Title B',
+      author: 'Author',
+      fileContentHash: HASH_A,
+      createdAt: new Date('2026-06-01'),
+    });
     bookRepository.findAllActive.mockResolvedValueOnce(Result.ok([older, newer]));
     duplicateRepository.findByBookIds.mockResolvedValue(Result.fail(new BookDuplicateNotFoundFailure()));
     duplicateRepository.create.mockResolvedValueOnce(Result.ok({} as BookDuplicate));
@@ -158,6 +191,8 @@ describe('DuplicateScanProcessor', () => {
     const bookA = makeBook({ id: 'book-a', title: 'Title A', author: 'Author', fileContentHash: HASH_A });
     const bookB = makeBook({ id: 'book-b', title: 'Title B', author: 'Author', fileContentHash: HASH_B });
     bookRepository.findAllActive.mockResolvedValueOnce(Result.ok([bookA, bookB]));
+    // Preserve each book's existing hash so they stay in separate groups
+    contentHashService.computeHash.mockResolvedValueOnce(HASH_A).mockResolvedValueOnce(HASH_B);
 
     await processor.process(scanJob);
 
@@ -165,14 +200,27 @@ describe('DuplicateScanProcessor', () => {
     expect(duplicateRepository.create).not.toHaveBeenCalled();
   });
 
-  test('Flags matching ISBN pairs as metadata match (no flagging)', async () => {
-    const bookA = makeBook({ id: 'book-a', title: 'Title A', author: 'Author', isbn: '978-0000000001', fileContentHash: HASH_A });
-    const bookB = makeBook({ id: 'book-b', title: 'Title B', author: 'Different Author', isbn: '978-0000000001', fileContentHash: HASH_A });
+  test('Flags pairs with matching ISBN as potential duplicates', async () => {
+    const bookA = makeBook({
+      id: 'book-a',
+      title: 'Title A',
+      author: 'Author',
+      isbn: '978-0000000001',
+      fileContentHash: HASH_A,
+    });
+    const bookB = makeBook({
+      id: 'book-b',
+      title: 'Title B',
+      author: 'Different Author',
+      isbn: '978-0000000001',
+      fileContentHash: HASH_A,
+    });
     bookRepository.findAllActive.mockResolvedValueOnce(Result.ok([bookA, bookB]));
+    duplicateRepository.findByBookIds.mockResolvedValue(Result.fail(new BookDuplicateNotFoundFailure()));
+    duplicateRepository.create.mockResolvedValueOnce(Result.ok({} as BookDuplicate));
 
     await processor.process(scanJob);
 
-    // Same ISBN → metadataMatches() returns true → not flagged
-    expect(duplicateRepository.create).not.toHaveBeenCalled();
+    expect(duplicateRepository.create).toHaveBeenCalledTimes(1);
   });
 });

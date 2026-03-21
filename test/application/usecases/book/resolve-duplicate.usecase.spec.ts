@@ -5,13 +5,21 @@ import { IBookRepository } from 'src/application/interfaces/book-repository';
 import { mock } from 'jest-mock-extended';
 import { Result, UnexpectedFailure } from 'src/core/result';
 import { BookDuplicate } from 'src/domain/entities/book-duplicate.entity';
-import { BookDuplicateNotFoundFailure, BookDuplicateAlreadyResolvedFailure } from 'src/domain/failures/book-duplicate.failures';
+import { BookDuplicateNotFoundFailure } from 'src/domain/failures/book-duplicate.failures';
 import { BookNotFoundFailure } from 'src/domain/failures/book.failures';
 import { mockBook, mockBookFavorite } from 'test/mocks/bookMocks';
 import Mocked = jest.Mocked;
 
 const unresolvedDuplicate = new BookDuplicate('dup-1', mockBook.id, mockBookFavorite.id, new Date('2026-01-01'));
-const resolvedDuplicate = new BookDuplicate('dup-1', mockBook.id, mockBookFavorite.id, new Date('2026-01-01'), new Date('2026-01-02'), 'merge', 'admin-1');
+const resolvedDuplicate = new BookDuplicate(
+  'dup-1',
+  mockBook.id,
+  mockBookFavorite.id,
+  new Date('2026-01-01'),
+  new Date('2026-01-02'),
+  'merge',
+  'admin-1',
+);
 
 describe('ResolveDuplicateUseCase', () => {
   let useCase: ResolveDuplicateUseCase;

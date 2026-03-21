@@ -3,10 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
 import { BookDuplicateEntity } from 'src/infrastructure/database/book-duplicate.entity';
 import { BookDuplicateMapper } from 'src/infrastructure/mappers/book-duplicate.mapper';
-import {
-  IBookDuplicateRepository,
-  BookDuplicateWithBooks,
-} from 'src/application/interfaces/book-duplicate-repository';
+import { IBookDuplicateRepository, BookDuplicateWithBooks } from 'src/application/interfaces/book-duplicate-repository';
 import { BookDuplicate, DuplicateResolution } from 'src/domain/entities/book-duplicate.entity';
 import { BookDuplicateNotFoundFailure } from 'src/domain/failures/book-duplicate.failures';
 import { Result } from 'src/core/result';

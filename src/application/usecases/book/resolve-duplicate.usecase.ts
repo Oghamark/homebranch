@@ -29,22 +29,25 @@ export class ResolveDuplicateUseCase implements UseCase<ResolveDuplicateRequest,
     const duplicate = duplicateResult.value;
     if (duplicate.resolvedAt) return Result.fail(new BookDuplicateAlreadyResolvedFailure());
 
-    // Resolve the duplicate record first, before any book deletion.
-    // Deleting a book triggers ON DELETE CASCADE on book_duplicate_entity, so
-    // the record must be updated before the referenced book is removed.
-    const resolveResult = await this.duplicateRepository.resolve(id, action, resolvedByUserId);
-    if (!resolveResult.isSuccess()) return Result.fail(resolveResult.failure!);
-
     if (action === 'merge') {
-      // Keep original, delete suspect and its files
+      // Keep original, delete suspect and its files.
+      // ON DELETE CASCADE on the FK will also remove the duplicate record.
       const deleteResult = await this.bookRepository.permanentDelete(duplicate.suspectBookId);
       if (!deleteResult.isSuccess()) return Result.fail(deleteResult.failure!);
     } else if (action === 'replace') {
-      // Keep suspect as canonical, delete original and its files
+      // Keep suspect as canonical, delete original and its files.
       const deleteResult = await this.bookRepository.permanentDelete(duplicate.originalBookId);
       if (!deleteResult.isSuccess()) return Result.fail(deleteResult.failure!);
     }
     // 'keep_both': no deletions, just mark resolved
+
+    const resolveResult = await this.duplicateRepository.resolve(id, action, resolvedByUserId);
+
+    // For merge/replace, ON DELETE CASCADE may have already removed the duplicate record
+    // when the book was deleted. Treat NOT_FOUND here as a success.
+    if (!resolveResult.isSuccess() && resolveResult.failure?.code === 'BOOK_DUPLICATE_NOT_FOUND') {
+      return Result.ok(duplicate);
+    }
 
     return resolveResult;
   }

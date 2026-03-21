@@ -10,10 +10,10 @@ export interface ListDuplicatesRequest {
 }
 
 @Injectable()
-export class ListDuplicatesUseCase implements UseCase<ListDuplicatesRequest, PaginationResult<BookDuplicateWithBooks[]>> {
-  constructor(
-    @Inject('BookDuplicateRepository') private readonly duplicateRepository: IBookDuplicateRepository,
-  ) {}
+export class ListDuplicatesUseCase
+  implements UseCase<ListDuplicatesRequest, PaginationResult<BookDuplicateWithBooks[]>>
+{
+  constructor(@Inject('BookDuplicateRepository') private readonly duplicateRepository: IBookDuplicateRepository) {}
 
   async execute({ limit, offset }: ListDuplicatesRequest): Promise<Result<PaginationResult<BookDuplicateWithBooks[]>>> {
     return this.duplicateRepository.listUnresolved(limit, offset);
