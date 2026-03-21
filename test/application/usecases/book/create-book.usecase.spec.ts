@@ -11,6 +11,16 @@ import { Result, UnexpectedFailure } from 'src/core/result';
 import { BookNotFoundFailure } from 'src/domain/failures/book.failures';
 import Mocked = jest.Mocked;
 
+jest.mock('fs/promises', () => ({
+  writeFile: jest.fn().mockResolvedValue(undefined),
+  unlink: jest.fn().mockResolvedValue(undefined),
+  rename: jest.fn().mockResolvedValue(undefined),
+}));
+
+jest.mock('fs', () => ({
+  existsSync: jest.fn().mockReturnValue(false),
+}));
+
 describe('CreateBookUseCase', () => {
   let useCase: CreateBookUseCase;
   let bookRepository: Mocked<IBookRepository>;

@@ -13,9 +13,10 @@ import { IMetadataGateway } from 'src/application/interfaces/metadata-gateway';
 import { IEpubParser } from 'src/application/interfaces/epub-parser';
 import { IContentHashService } from 'src/application/interfaces/content-hash-service';
 import { BookMissingMetadataFailure } from 'src/domain/failures/book.failures';
-import { writeFile, unlink } from 'fs/promises';
+import { writeFile, unlink, rename } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join, basename } from 'path';
+import { FileNameGenerator } from 'src/domain/services/filename-generator';
 
 export interface CreateBookResult {
   book: Book;
@@ -36,14 +37,15 @@ export class CreateBookUseCase implements UseCase<CreateBookRequest, CreateBookR
 
   async execute(dto: CreateBookRequest): Promise<Result<CreateBookResult>> {
     const uploadsDirectory = process.env.UPLOADS_DIRECTORY || './uploads';
-    const epubPath = join(uploadsDirectory, 'books', basename(dto.fileName));
+    // Uploaded files land in incoming/ staging area (file watcher only watches books/)
+    const incomingPath = join(uploadsDirectory, 'incoming', basename(dto.fileName));
 
     const enrichedDto = { ...dto };
     let epubSummary: string | undefined;
     let extractedCoverFileName: string | undefined;
 
     try {
-      const epubMeta = await this.epubParser.parse(epubPath);
+      const epubMeta = await this.epubParser.parse(incomingPath);
 
       // User-provided fields win; epub fills blanks
       if (!enrichedDto.title && epubMeta.title) enrichedDto.title = epubMeta.title;
@@ -74,17 +76,22 @@ export class CreateBookUseCase implements UseCase<CreateBookRequest, CreateBookR
     if (!enrichedDto.author) return Result.fail(new BookMissingMetadataFailure('author'));
 
     // Compute content hash and check for duplicates
-    const contentHash = await this.contentHashService.computeHash(epubPath);
+    const contentHash = await this.contentHashService.computeHash(incomingPath);
     const existingByHash = await this.bookRepository.findByContentHash(contentHash);
 
     if (existingByHash.isSuccess()) {
       const existing = existingByHash.value;
       if (metadataMatches(existing, { title: enrichedDto.title, author: enrichedDto.author, isbn: enrichedDto.isbn })) {
-        // Exact duplicate: clean up uploaded files and return existing book
-        await this.deleteUploadedFiles(uploadsDirectory, dto.fileName, dto.coverImageFileName, extractedCoverFileName);
+        // Exact duplicate: clean up staging files and return existing book
+        await this.deleteIncomingFiles(uploadsDirectory, dto.fileName, dto.coverImageFileName, extractedCoverFileName);
         return Result.ok({ book: existing, skipped: true });
       }
     }
+
+    // Determine the final filename (Author - Title.epub) and resolve collisions
+    const desiredFileName = FileNameGenerator.generate(enrichedDto.author, enrichedDto.title);
+    const finalFileName = this.resolveUniqueFileName(uploadsDirectory, desiredFileName);
+    enrichedDto.fileName = finalFileName;
 
     const id = randomUUID();
     const book = BookFactory.create(
@@ -118,6 +125,9 @@ export class CreateBookUseCase implements UseCase<CreateBookRequest, CreateBookR
     const createResult = await this.bookRepository.create(book);
 
     if (createResult.isSuccess()) {
+      // Move the file from staging to the books directory now that the DB record exists
+      await rename(incomingPath, join(uploadsDirectory, 'books', finalFileName));
+
       // If a book with the same content hash exists but different metadata, flag as potential duplicate
       if (existingByHash.isSuccess()) {
         const duplicate = new BookDuplicate(randomUUID(), createResult.value.id, existingByHash.value.id, new Date());
@@ -140,19 +150,34 @@ export class CreateBookUseCase implements UseCase<CreateBookRequest, CreateBookR
     return Result.fail(createResult.failure!);
   }
 
-  private async deleteUploadedFiles(
+  private async deleteIncomingFiles(
     uploadsDirectory: string,
     epubFileName: string,
     uploadedCoverFileName?: string,
     extractedCoverFileName?: string,
   ): Promise<void> {
     const filesToDelete = [
-      join(uploadsDirectory, 'books', basename(epubFileName)),
+      join(uploadsDirectory, 'incoming', basename(epubFileName)),
       uploadedCoverFileName ? join(uploadsDirectory, 'cover-images', basename(uploadedCoverFileName)) : null,
       extractedCoverFileName ? join(uploadsDirectory, 'cover-images', basename(extractedCoverFileName)) : null,
     ].filter((f): f is string => f !== null && existsSync(f));
 
     await Promise.all(filesToDelete.map((f) => unlink(f)));
+  }
+
+  private resolveUniqueFileName(uploadsDirectory: string, desiredFileName: string): string {
+    const booksDir = join(uploadsDirectory, 'books');
+    if (!existsSync(join(booksDir, desiredFileName))) return desiredFileName;
+
+    const ext = '.epub';
+    const nameWithoutExt = desiredFileName.replace(/\.epub$/i, '');
+    let counter = 2;
+    let candidate = `${nameWithoutExt} (${counter})${ext}`;
+    while (existsSync(join(booksDir, candidate))) {
+      counter++;
+      candidate = `${nameWithoutExt} (${counter})${ext}`;
+    }
+    return candidate;
   }
 
   _parseYear(year: string): number | undefined {

@@ -118,15 +118,17 @@ export class BookController {
             file: Express.Multer.File,
             cb: (error: Error | null, destination: string) => void,
           ) => {
+            const uploadsDir = process.env.UPLOADS_DIRECTORY || join(process.cwd(), 'uploads');
             switch (file.fieldname) {
               case 'file':
-                cb(null, `${process.env.UPLOADS_DIRECTORY || join(process.cwd(), 'uploads')}/books`);
+                // Save to staging area so the file watcher doesn't pick it up mid-upload
+                cb(null, `${uploadsDir}/incoming`);
                 break;
               case 'coverImage':
-                cb(null, `${process.env.UPLOADS_DIRECTORY || join(process.cwd(), 'uploads')}/cover-images`);
+                cb(null, `${uploadsDir}/cover-images`);
                 break;
               default:
-                cb(new Error('Invalid field name'), process.env.UPLOADS_DIRECTORY || join(process.cwd(), 'uploads'));
+                cb(new Error('Invalid field name'), uploadsDir);
                 break;
             }
           },
