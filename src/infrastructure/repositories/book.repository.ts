@@ -158,6 +158,11 @@ export class TypeOrmBookRepository implements IBookRepository {
     return Result.ok(BookMapper.toDomainList(bookEntities));
   }
 
+  async updateContentHash(id: string, hash: string): Promise<Result<void>> {
+    await this.repository.update({ id }, { fileContentHash: hash });
+    return Result.ok(undefined);
+  }
+
   async findUnowned(limit?: number, offset?: number): Promise<Result<PaginationResult<Book[]>>> {
     const [bookEntities, total] = await this.repository.findAndCount({
       where: { uploadedByUserId: IsNull(), deletedAt: IsNull() },

@@ -1,9 +1,11 @@
-import { Controller, Get, Param, Query, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Controller, Get, Param, Query, Sse, UseGuards, UseInterceptors } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue, JobState } from 'bullmq';
+import { Observable } from 'rxjs';
 import { JwtAuthGuard } from 'src/infrastructure/guards/jwt-auth.guard';
 import { MapResultInterceptor } from 'src/presentation/interceptors/map_result.interceptor';
 import { Result } from 'src/core/result';
+import { JobEventsService } from 'src/infrastructure/services/job-events.service';
 
 export interface JobInfo {
   id: string | undefined;
@@ -28,8 +30,16 @@ export class JobController {
   constructor(
     @InjectQueue('library-scan') private readonly libraryScanQueue: Queue,
     @InjectQueue('file-processing') private readonly fileProcessingQueue: Queue,
+    @InjectQueue('duplicate-scan') private readonly duplicateScanQueue: Queue,
+    private readonly jobEventsService: JobEventsService,
   ) {
-    this.queues = [this.libraryScanQueue, this.fileProcessingQueue];
+    this.queues = [this.libraryScanQueue, this.fileProcessingQueue, this.duplicateScanQueue];
+  }
+
+  @Sse('stream')
+  @UseGuards(JwtAuthGuard)
+  streamJobs(): Observable<MessageEvent> {
+    return this.jobEventsService.getStream();
   }
 
   @Get()

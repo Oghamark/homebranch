@@ -70,6 +70,7 @@ export interface IBookRepository extends IRepository<Book> {
   softDelete(id: string): Promise<Result<Book>>;
   restore(id: string): Promise<Result<Book>>;
   permanentDelete(id: string): Promise<Result<Book>>;
+  updateContentHash(id: string, hash: string): Promise<Result<void>>;
   findUnowned(limit?: number, offset?: number): Promise<Result<PaginationResult<Book[]>>>;
   findOrphaned(knownUserIds: string[], limit?: number, offset?: number): Promise<Result<PaginationResult<Book[]>>>;
 }

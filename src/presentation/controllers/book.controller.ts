@@ -149,7 +149,7 @@ export class BookController {
       },
     ),
   )
-  createBook(
+  async createBook(
     @CurrentUser() currentUser: Express.User,
     @UploadedFiles()
     files: {
@@ -166,7 +166,14 @@ export class BookController {
       uploadedByUserId: currentUser.id,
     };
 
-    return this.createBookUseCase.execute(bookRequest);
+    const result = await this.createBookUseCase.execute(bookRequest);
+    if (!result.isSuccess()) return result;
+
+    const { book, skipped } = result.value;
+    if (skipped) {
+      return Result.ok({ skipped: true, existingBook: book });
+    }
+    return Result.ok(book);
   }
 
   @Delete(`:id`)
