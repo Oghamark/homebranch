@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Post, Put, Query, UseGuards, UseInterceptors } from '@nestjs/common';
-import { JwtAuthGuard } from 'src/infrastructure/guards/jwt-auth.guard';
+import { JwtAuthGuard } from 'src/presentation/guards/jwt-auth.guard';
 import { MapResultInterceptor } from '../interceptors/map_result.interceptor';
 import { GetBookShelvesUseCase } from 'src/application/usecases/bookshelf/get-book-shelves-use-case.service';
 import { GetBookShelfByIdUseCase } from 'src/application/usecases/bookshelf/get-book-shelf-by-id-use-case.service';
@@ -17,7 +17,7 @@ import { AddBookToBookShelfDto } from '../dtos/add-book-to-book-shelf.dto';
 import { RemoveBookFromBookShelfDto } from '../dtos/remove-book-from-book-shelf.dto';
 import { GetBookShelfBooksUseCase } from 'src/application/usecases/bookshelf/get-book-shelf-books-use-case.service';
 import { GetBookShelvesByBookUseCase } from 'src/application/usecases/bookshelf/get-book-shelves-by-book-use-case.service';
-import { CurrentUser } from 'src/infrastructure/decorators/current-user.decorator';
+import { CurrentUser } from 'src/presentation/decorators/current-user.decorator';
 
 @Controller('book-shelves')
 @UseInterceptors(MapResultInterceptor)

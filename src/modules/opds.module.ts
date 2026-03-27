@@ -16,7 +16,7 @@ import { OpdsV2Builder } from 'src/presentation/opds/opds-v2.builder';
 import { OpdsV1Controller } from 'src/presentation/controllers/opds-v1.controller';
 import { OpdsV2Controller } from 'src/presentation/controllers/opds-v2.controller';
 import { HttpAuthGateway } from 'src/infrastructure/gateways/http-auth.gateway';
-import { OpdsBasicAuthGuard } from 'src/infrastructure/guards/opds-basic-auth.guard';
+import { OpdsBasicAuthGuard } from 'src/presentation/guards/opds-basic-auth.guard';
 
 @Module({
   imports: [TypeOrmModule.forFeature([BookEntity, BookShelfEntity]), AuthModule, BooksModule],

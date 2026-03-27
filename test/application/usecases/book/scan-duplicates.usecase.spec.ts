@@ -1,18 +1,18 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ScanDuplicatesUseCase } from 'src/application/usecases/book/scan-duplicates.usecase';
-import { getQueueToken } from '@nestjs/bullmq';
+import { IDuplicateScanQueue } from 'src/application/interfaces/duplicate-scan-queue';
 
 describe('ScanDuplicatesUseCase', () => {
   let useCase: ScanDuplicatesUseCase;
-  const mockQueue = { add: jest.fn().mockResolvedValue({ id: 'job-1' }) };
+  const mockDuplicateScanQueue: IDuplicateScanQueue = { enqueueScan: jest.fn().mockResolvedValue(undefined) };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ScanDuplicatesUseCase,
         {
-          provide: getQueueToken('duplicate-scan'),
-          useValue: mockQueue,
+          provide: 'DuplicateScanQueue',
+          useValue: mockDuplicateScanQueue,
         },
       ],
     }).compile();
@@ -24,12 +24,11 @@ describe('ScanDuplicatesUseCase', () => {
     jest.clearAllMocks();
   });
 
-  test('Enqueues a scan-duplicates job', async () => {
+  test('Enqueues a duplicate scan job', async () => {
     const result = await useCase.execute();
 
     expect(result.isSuccess()).toBe(true);
-    expect(mockQueue.add).toHaveBeenCalledTimes(1);
-    expect(mockQueue.add).toHaveBeenCalledWith('scan-duplicates', {});
+    expect(mockDuplicateScanQueue.enqueueScan).toHaveBeenCalledTimes(1);
   });
 
   test('Returns ok result', async () => {

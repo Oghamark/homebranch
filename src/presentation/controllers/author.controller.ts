@@ -17,7 +17,7 @@ import { diskStorage } from 'multer';
 import { randomUUID } from 'crypto';
 import { join } from 'path';
 import { Request } from 'express';
-import { JwtAuthGuard } from 'src/infrastructure/guards/jwt-auth.guard';
+import { JwtAuthGuard } from 'src/presentation/guards/jwt-auth.guard';
 import { MapResultInterceptor } from '../interceptors/map_result.interceptor';
 import { GetAuthorsUseCase } from 'src/application/usecases/author/get-authors.usecase';
 import { GetAuthorUseCase } from 'src/application/usecases/author/get-author.usecase';

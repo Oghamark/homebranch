@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { DomainExceptionFilter } from 'src/infrastructure/filters/domain-exception.filter';
+import { DomainExceptionFilter } from 'src/presentation/filters/domain-exception.filter';
 import { ArgumentsHost, HttpStatus } from '@nestjs/common';
 import {
   InvalidCredentialsError,

@@ -1,7 +1,7 @@
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from 'src/app.module';
-import { DomainExceptionFilter } from 'src/infrastructure/filters/domain-exception.filter';
+import { DomainExceptionFilter } from 'src/presentation/filters/domain-exception.filter';
 import { existsSync, mkdirSync } from 'fs';
 import { join, resolve } from 'path';
 import * as express from 'express';
@@ -17,7 +17,6 @@ async function bootstrap() {
   app.useGlobalFilters(new DomainExceptionFilter());
   app.useGlobalPipes(new ValidationPipe({ stopAtFirstError: true, transform: true }));
   app.use(cookieParser());
-  app.enableCors();
 
   const port = process.env.PORT || 3000;
   const uploadsDirectory = process.env.UPLOADS_DIRECTORY || './uploads';

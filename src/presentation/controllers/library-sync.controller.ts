@@ -11,17 +11,17 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { InjectQueue } from '@nestjs/bullmq';
-import { Queue } from 'bullmq';
 import { IsArray, IsOptional, IsUUID } from 'class-validator';
-import { JwtAuthGuard } from 'src/infrastructure/guards/jwt-auth.guard';
-import { RolesGuard } from 'src/infrastructure/guards/roles.guard';
-import { Roles } from 'src/infrastructure/guards/roles.decorator';
+import { JwtAuthGuard } from 'src/presentation/guards/jwt-auth.guard';
+import { RolesGuard } from 'src/presentation/guards/roles.guard';
+import { Roles } from 'src/presentation/guards/roles.decorator';
 import { MapResultInterceptor } from 'src/presentation/interceptors/map_result.interceptor';
-import { IBookRepository } from 'src/application/interfaces/book-repository';
-import { Result } from 'src/core/result';
-import { LibraryEventsService } from 'src/infrastructure/services/library-events.service';
+import { ILibraryEventsService } from 'src/application/interfaces/library-events-service';
 import { Observable } from 'rxjs';
+import { TriggerLibraryScanUseCase } from 'src/application/usecases/library/trigger-library-scan.usecase';
+import { TriggerBookMetadataSyncUseCase } from 'src/application/usecases/library/trigger-book-metadata-sync.usecase';
+import { GetUnownedBooksUseCase } from 'src/application/usecases/book/get-unowned-books.usecase';
+import { GetOrphanedBooksUseCase } from 'src/application/usecases/book/get-orphaned-books.usecase';
 
 class OrphanedBooksDto {
   @IsArray()
@@ -40,10 +40,11 @@ class OrphanedBooksDto {
 @UseInterceptors(MapResultInterceptor)
 export class LibrarySyncController {
   constructor(
-    @InjectQueue('library-scan') private readonly libraryScanQueue: Queue,
-    @InjectQueue('file-processing') private readonly fileProcessingQueue: Queue,
-    @Inject('BookRepository') private readonly bookRepository: IBookRepository,
-    private readonly libraryEventsService: LibraryEventsService,
+    private readonly triggerLibraryScanUseCase: TriggerLibraryScanUseCase,
+    private readonly triggerBookMetadataSyncUseCase: TriggerBookMetadataSyncUseCase,
+    private readonly getUnownedBooksUseCase: GetUnownedBooksUseCase,
+    private readonly getOrphanedBooksUseCase: GetOrphanedBooksUseCase,
+    @Inject('LibraryEventsService') private readonly libraryEventsService: ILibraryEventsService,
   ) {}
 
   @Sse('events')
@@ -56,47 +57,34 @@ export class LibrarySyncController {
   @Post('scan')
   @UseGuards(JwtAuthGuard)
   async triggerScan() {
-    const job = await this.libraryScanQueue.add(
-      'scan-directory',
-      {
-        trigger: 'manual',
-        booksDirectory: `${process.env.UPLOADS_DIRECTORY || './uploads'}/books`,
-      },
-      { removeOnComplete: 100, removeOnFail: 50 },
-    );
-    return Result.ok({ jobId: job.id });
+    const booksDirectory = `${process.env.UPLOADS_DIRECTORY || './uploads'}/books`;
+    return this.triggerLibraryScanUseCase.execute({ booksDirectory });
   }
 
   @Post('books/:id/sync')
   @UseGuards(JwtAuthGuard)
   async triggerBookSync(@Param('id') id: string) {
-    const job = await this.fileProcessingQueue.add(
-      'sync-metadata',
-      {
-        bookId: id,
-        fileName: '',
-        filePath: '',
-      },
-      { jobId: `sync-${id}-manual`, removeOnComplete: 100, removeOnFail: 50 },
-    );
-    return Result.ok({ jobId: job.id });
+    return this.triggerBookMetadataSyncUseCase.execute({ bookId: id });
   }
 
   @Get('unowned-books')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
   async getUnownedBooks(@Query('limit') limit?: number, @Query('offset') offset?: number) {
-    const result = await this.bookRepository.findUnowned(limit ? Number(limit) : 20, offset ? Number(offset) : 0);
-    if (!result.isSuccess()) return result;
-    return Result.ok(result.value);
+    return this.getUnownedBooksUseCase.execute({
+      limit: limit ? Number(limit) : 20,
+      offset: offset ? Number(offset) : 0,
+    });
   }
 
   @Post('orphaned-books')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
   async getOrphanedBooks(@Body() dto: OrphanedBooksDto) {
-    const result = await this.bookRepository.findOrphaned(dto.knownUserIds ?? [], dto.limit ?? 20, dto.offset ?? 0);
-    if (!result.isSuccess()) return result;
-    return Result.ok(result.value);
+    return this.getOrphanedBooksUseCase.execute({
+      knownUserIds: dto.knownUserIds ?? [],
+      limit: dto.limit ?? 20,
+      offset: dto.offset ?? 0,
+    });
   }
 }

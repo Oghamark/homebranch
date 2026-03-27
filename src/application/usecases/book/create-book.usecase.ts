@@ -12,9 +12,8 @@ import { UseCase } from 'src/core/usecase';
 import { IMetadataGateway } from 'src/application/interfaces/metadata-gateway';
 import { IEpubParser } from 'src/application/interfaces/epub-parser';
 import { IContentHashService } from 'src/application/interfaces/content-hash-service';
+import { IFileService } from 'src/application/interfaces/file-service';
 import { BookMissingMetadataFailure } from 'src/domain/failures/book.failures';
-import { writeFile, unlink, rename } from 'fs/promises';
-import { existsSync } from 'fs';
 import { join, basename } from 'path';
 import { FileNameGenerator } from 'src/domain/services/filename-generator';
 
@@ -33,6 +32,7 @@ export class CreateBookUseCase implements UseCase<CreateBookRequest, CreateBookR
     @Inject('MetadataGateway') private metadataGateway: IMetadataGateway,
     @Inject('EpubParser') private epubParser: IEpubParser,
     @Inject('ContentHashService') private contentHashService: IContentHashService,
+    @Inject('FileService') private fileService: IFileService,
   ) {}
 
   async execute(dto: CreateBookRequest): Promise<Result<CreateBookResult>> {
@@ -64,7 +64,7 @@ export class CreateBookUseCase implements UseCase<CreateBookRequest, CreateBookR
       if (!enrichedDto.coverImageFileName && epubMeta.coverImageBuffer) {
         const coverFileName = `${randomUUID()}.jpg`;
         const coverPath = join(uploadsDirectory, 'cover-images', coverFileName);
-        await writeFile(coverPath, epubMeta.coverImageBuffer);
+        await this.fileService.writeFile(coverPath, epubMeta.coverImageBuffer);
         enrichedDto.coverImageFileName = coverFileName;
         extractedCoverFileName = coverFileName;
       }
@@ -126,7 +126,7 @@ export class CreateBookUseCase implements UseCase<CreateBookRequest, CreateBookR
 
     if (createResult.isSuccess()) {
       // Move the file from staging to the books directory now that the DB record exists
-      await rename(incomingPath, join(uploadsDirectory, 'books', finalFileName));
+      await this.fileService.moveFile(incomingPath, join(uploadsDirectory, 'books', finalFileName));
 
       // If a book with the same content hash exists but different metadata, flag as potential duplicate
       if (existingByHash.isSuccess()) {
@@ -160,20 +160,20 @@ export class CreateBookUseCase implements UseCase<CreateBookRequest, CreateBookR
       join(uploadsDirectory, 'incoming', basename(epubFileName)),
       uploadedCoverFileName ? join(uploadsDirectory, 'cover-images', basename(uploadedCoverFileName)) : null,
       extractedCoverFileName ? join(uploadsDirectory, 'cover-images', basename(extractedCoverFileName)) : null,
-    ].filter((f): f is string => f !== null && existsSync(f));
+    ].filter((f): f is string => f !== null && this.fileService.fileExists(f));
 
-    await Promise.all(filesToDelete.map((f) => unlink(f)));
+    await Promise.all(filesToDelete.map((f) => this.fileService.deleteFile(f)));
   }
 
   private resolveUniqueFileName(uploadsDirectory: string, desiredFileName: string): string {
     const booksDir = join(uploadsDirectory, 'books');
-    if (!existsSync(join(booksDir, desiredFileName))) return desiredFileName;
+    if (!this.fileService.fileExists(join(booksDir, desiredFileName))) return desiredFileName;
 
     const ext = '.epub';
     const nameWithoutExt = desiredFileName.replace(/\.epub$/i, '');
     let counter = 2;
     let candidate = `${nameWithoutExt} (${counter})${ext}`;
-    while (existsSync(join(booksDir, candidate))) {
+    while (this.fileService.fileExists(join(booksDir, candidate))) {
       counter++;
       candidate = `${nameWithoutExt} (${counter})${ext}`;
     }

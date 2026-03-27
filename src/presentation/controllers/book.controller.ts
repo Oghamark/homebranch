@@ -9,12 +9,14 @@ import {
   Post,
   Put,
   Query,
+  Req,
   Res,
   StreamableFile,
   UploadedFiles,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
+import { Request } from 'express';
 import { CreateBookRequest } from 'src/application/contracts/book/create-book-request';
 import { UpdateBookRequest } from 'src/application/contracts/book/update-book-request';
 import { GetBooksRequest } from 'src/application/contracts/book/get-books-request';
@@ -32,16 +34,18 @@ import { basename, join } from 'path';
 import { DeleteBookRequest } from 'src/application/contracts/book/delete-book-request';
 import { GetFavoriteBooksUseCase } from 'src/application/usecases/book/get-favorite-books-use-case.service';
 import { ToggleBookFavoriteUseCase } from 'src/application/usecases/book/toggle-book-favorite-use-case.service';
-import { JwtAuthGuard } from 'src/infrastructure/guards/jwt-auth.guard';
-import { RolesGuard } from 'src/infrastructure/guards/roles.guard';
-import { Roles } from 'src/infrastructure/guards/roles.decorator';
+import { JwtAuthGuard } from 'src/presentation/guards/jwt-auth.guard';
+import { RolesGuard } from 'src/presentation/guards/roles.guard';
+import { Roles } from 'src/presentation/guards/roles.decorator';
 import { MapResultInterceptor } from '../interceptors/map_result.interceptor';
 import { DownloadBookUseCase } from 'src/application/usecases/book/download-book.usecase';
+import { GetBookManifestUseCase } from 'src/application/usecases/book/get-book-manifest.usecase';
+import { GetBookContentUseCase } from 'src/application/usecases/book/get-book-content.usecase';
 import { createReadStream, existsSync } from 'fs';
 import { Response } from 'express';
 import { FetchBookMetadataUseCase } from 'src/application/usecases/book/fetch-book-metadata-use-case.service';
 import { FetchBookSummaryUseCase } from 'src/application/usecases/book/fetch-book-summary.usecase';
-import { CurrentUser } from 'src/infrastructure/decorators/current-user.decorator';
+import { CurrentUser } from 'src/presentation/decorators/current-user.decorator';
 import { IsOptional, IsUUID } from 'class-validator';
 import { Result } from 'src/core/result';
 
@@ -71,6 +75,8 @@ export class BookController {
     private readonly deleteBookUseCase: DeleteBookUseCase,
     private readonly updateBookUseCase: UpdateBookUseCase,
     private readonly downloadBookUseCase: DownloadBookUseCase,
+    private readonly getBookManifestUseCase: GetBookManifestUseCase,
+    private readonly getBookContentUseCase: GetBookContentUseCase,
     private readonly fetchBookMetadataUseCase: FetchBookMetadataUseCase,
     private readonly fetchBookSummaryUseCase: FetchBookSummaryUseCase,
     private readonly assignBookOwnerUseCase: AssignBookOwnerUseCase,
@@ -238,6 +244,50 @@ export class BookController {
   @UseGuards(JwtAuthGuard)
   fetchBookSummary(@Param('id') id: string) {
     return this.fetchBookSummaryUseCase.execute({ id });
+  }
+
+  @Get(':id/manifest')
+  @UseGuards(JwtAuthGuard)
+  async getBookManifest(
+    @Param('id') id: string,
+    @Req() req: Request,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<object | void> {
+    const prefix = (req.get('x-forwarded-prefix') as string | undefined) ?? '';
+    const baseUrl = `${req.protocol}://${req.get('host')}${prefix}`;
+    const result = await this.getBookManifestUseCase.execute({ id, baseUrl });
+
+    if (result.isFailure()) {
+      response.status(404).json({ success: false, error: result.failure.code, message: result.failure.message });
+      return;
+    }
+
+    response.setHeader('Content-Type', 'application/webpub+json');
+    return result.value;
+  }
+
+  @Get(':id/content/*')
+  @UseGuards(JwtAuthGuard)
+  async getBookContent(
+    @Param('id') id: string,
+    @Req() req: Request,
+    @Res() response: Response,
+  ): Promise<void> {
+    // Extract the entry path from the URL, after /content/
+    const rawPath = req.url.split(`/content/`)[1]?.split('?')[0] ?? '';
+    const entryPath = rawPath.split('/').map(decodeURIComponent).join('/');
+
+    const result = await this.getBookContentUseCase.execute({ id, entryPath });
+
+    if (result.isFailure()) {
+      response.status(404).json({ success: false, error: result.failure.code, message: result.failure.message });
+      return;
+    }
+
+    const { data, mediaType } = result.value!;
+    response.setHeader('Content-Type', mediaType);
+    response.setHeader('Cache-Control', 'private, max-age=3600');
+    response.send(data);
   }
 
   @Get(':id/download')

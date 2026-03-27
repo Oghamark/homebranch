@@ -15,7 +15,7 @@ import { DeleteBookShelfUseCase } from 'src/application/usecases/bookshelf/delet
 import { UpdateBookShelfUseCase } from 'src/application/usecases/bookshelf/update-book-shelf-use-case.service';
 import { AddBookToBookShelfUseCase } from 'src/application/usecases/bookshelf/add-book-to-book-shelf-use-case.service';
 import { RemoveBookFromBookShelfUseCase } from 'src/application/usecases/bookshelf/remove-book-from-book-shelf-use-case.service';
-import { JwtAuthGuard } from 'src/infrastructure/guards/jwt-auth.guard';
+import { JwtAuthGuard } from 'src/presentation/guards/jwt-auth.guard';
 
 interface ApiResponse<T = unknown> {
   success: boolean;
