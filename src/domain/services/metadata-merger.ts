@@ -22,7 +22,6 @@ const SYNCABLE_FIELDS: (keyof SyncableMetadata)[] = [
 ];
 
 export class MetadataMerger {
-
   static merge(
     fileMetadata: SyncableMetadata,
     dbMetadata: SyncableMetadata,

@@ -253,7 +253,7 @@ export class BookController {
     @Req() req: Request,
     @Res({ passthrough: true }) response: Response,
   ): Promise<object | void> {
-    const prefix = (req.get('x-forwarded-prefix') as string | undefined) ?? '';
+    const prefix = req.get('x-forwarded-prefix') ?? '';
     const baseUrl = `${req.protocol}://${req.get('host')}${prefix}`;
     const result = await this.getBookManifestUseCase.execute({ id, baseUrl });
 
@@ -268,11 +268,7 @@ export class BookController {
 
   @Get(':id/content/*')
   @UseGuards(JwtAuthGuard)
-  async getBookContent(
-    @Param('id') id: string,
-    @Req() req: Request,
-    @Res() response: Response,
-  ): Promise<void> {
+  async getBookContent(@Param('id') id: string, @Req() req: Request, @Res() response: Response): Promise<void> {
     // Extract the entry path from the URL, after /content/
     const rawPath = req.url.split(`/content/`)[1]?.split('?')[0] ?? '';
     const entryPath = rawPath.split('/').map(decodeURIComponent).join('/');

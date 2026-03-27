@@ -32,9 +32,7 @@ export class EpubManifestService implements IPublicationManifestService {
 
     const containerXml = zip.readAsText('META-INF/container.xml');
     const opfRelPath = this.extractOpfPath(containerXml);
-    const opfDir = opfRelPath.includes('/')
-      ? opfRelPath.substring(0, opfRelPath.lastIndexOf('/') + 1)
-      : '';
+    const opfDir = opfRelPath.includes('/') ? opfRelPath.substring(0, opfRelPath.lastIndexOf('/') + 1) : '';
     const opfXml = zip.readAsText(opfRelPath);
 
     const manifestItems = this.parseManifest(opfXml);
@@ -43,8 +41,7 @@ export class EpubManifestService implements IPublicationManifestService {
 
     const contentBase = `${baseUrl}/books/${book.id}/content`;
     // Encode each path segment individually to preserve slashes
-    const makeUrl = (zipPath: string) =>
-      `${contentBase}/${zipPath.split('/').map(encodeURIComponent).join('/')}`;
+    const makeUrl = (zipPath: string) => `${contentBase}/${zipPath.split('/').map(encodeURIComponent).join('/')}`;
     const resolveHref = (relHref: string) => opfDir + relHref;
 
     const readingOrder = spineItems
@@ -74,9 +71,7 @@ export class EpubManifestService implements IPublicationManifestService {
         try {
           const navPath = resolveHref(navItem.href);
           const navXml = zip.readAsText(navPath);
-          const navDir = navPath.includes('/')
-            ? navPath.substring(0, navPath.lastIndexOf('/') + 1)
-            : '';
+          const navDir = navPath.includes('/') ? navPath.substring(0, navPath.lastIndexOf('/') + 1) : '';
           toc = this.parseNavToc(navXml, makeUrl, navDir);
         } catch (e) {
           this.logger.warn(`Failed to parse EPUB3 nav TOC: ${e}`);
@@ -88,9 +83,7 @@ export class EpubManifestService implements IPublicationManifestService {
         try {
           const ncxPath = resolveHref(ncxItem.href);
           const ncxXml = zip.readAsText(ncxPath);
-          const ncxDir = ncxPath.includes('/')
-            ? ncxPath.substring(0, ncxPath.lastIndexOf('/') + 1)
-            : '';
+          const ncxDir = ncxPath.includes('/') ? ncxPath.substring(0, ncxPath.lastIndexOf('/') + 1) : '';
           toc = this.parseNcxToc(ncxXml, makeUrl, ncxDir);
         } catch (e) {
           this.logger.warn(`Failed to parse EPUB2 NCX TOC: ${e}`);
@@ -180,7 +173,7 @@ export class EpubManifestService implements IPublicationManifestService {
   }
 
   private extractDcValue(opfXml: string, element: string): string | undefined {
-    return new RegExp(`<dc:${element}[^>]*>([^<]+)<\/dc:${element}>`, 'i').exec(opfXml)?.[1]?.trim();
+    return new RegExp(`<dc:${element}[^>]*>([^<]+)</dc:${element}>`, 'i').exec(opfXml)?.[1]?.trim();
   }
 
   private extractReadingProgression(opfXml: string): string {
@@ -202,9 +195,7 @@ export class EpubManifestService implements IPublicationManifestService {
   }
 
   private parseNavToc(navXml: string, makeUrl: (p: string) => string, navDir: string): TocEntry[] {
-    const tocNavMatch = navXml.match(
-      /<nav[^>]+(?:epub:type|type)="toc"[^>]*>([\s\S]*?)<\/nav>/i,
-    );
+    const tocNavMatch = navXml.match(/<nav[^>]+(?:epub:type|type)="toc"[^>]*>([\s\S]*?)<\/nav>/i);
     if (!tocNavMatch) return [];
     return this.parseOlItems(tocNavMatch[1], makeUrl, navDir);
   }
@@ -256,11 +247,7 @@ export class EpubManifestService implements IPublicationManifestService {
     return this.parseNavPoints(navMapMatch[1], makeUrl, ncxDir);
   }
 
-  private parseNavPoints(
-    xml: string,
-    makeUrl: (p: string) => string,
-    baseDir: string,
-  ): TocEntry[] {
+  private parseNavPoints(xml: string, makeUrl: (p: string) => string, baseDir: string): TocEntry[] {
     const items: TocEntry[] = [];
     const re = /<navPoint\b[^>]*>([\s\S]*?)<\/navPoint>/gi;
     let m: RegExpExecArray | null;

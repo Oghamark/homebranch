@@ -17,9 +17,7 @@ export class JobQueryService implements IJobQueryService {
 
   async listJobs(status?: string, queue?: string, limit = 20, offset = 0): Promise<JobListResult> {
     const targetQueues = queue ? this.queues.filter((q) => q.name === queue) : this.queues;
-    const states: JobState[] = status
-      ? [status as JobState]
-      : ['active', 'waiting', 'completed', 'failed', 'delayed'];
+    const states: JobState[] = status ? [status as JobState] : ['active', 'waiting', 'completed', 'failed', 'delayed'];
 
     const allJobs: JobInfo[] = [];
     for (const q of targetQueues) {
