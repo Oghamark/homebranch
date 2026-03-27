@@ -33,7 +33,7 @@ It provides a user-friendly interface to organize, search, and read your ebooks 
 
 ## Features
 
-- Book management with file upload (EPUB) — uploaded files are saved as `Author - Title.epub`
+- Book management with file upload (EPUB) — uploaded files are saved as `Author - Title.epub`; publication manifest (`GET /books/:id/manifest`) and content proxy (`GET /books/:id/content/:filename`) endpoints power the Readium-based web reader
 - Automatic metadata enrichment from Open Library (genres, publisher, language, ratings, summary, ISBN, page count)
 - Optional Google Books enrichment for series info and any fields Open Library didn't populate
 - Bookshelves (collections) with many-to-many book relationships
