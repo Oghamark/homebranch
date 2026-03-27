@@ -1,9 +1,9 @@
 import { Body, Controller, Get, HttpCode, Param, Post, Query, UseGuards, UseInterceptors } from '@nestjs/common';
-import { JwtAuthGuard } from 'src/infrastructure/guards/jwt-auth.guard';
-import { RolesGuard } from 'src/infrastructure/guards/roles.guard';
-import { Roles } from 'src/infrastructure/guards/roles.decorator';
+import { JwtAuthGuard } from 'src/presentation/guards/jwt-auth.guard';
+import { RolesGuard } from 'src/presentation/guards/roles.guard';
+import { Roles } from 'src/presentation/guards/roles.decorator';
 import { MapResultInterceptor } from '../interceptors/map_result.interceptor';
-import { CurrentUser } from 'src/infrastructure/decorators/current-user.decorator';
+import { CurrentUser } from 'src/presentation/decorators/current-user.decorator';
 import { PaginatedQuery } from 'src/core/paginated-query';
 import { ListDuplicatesUseCase } from 'src/application/usecases/book/list-duplicates.usecase';
 import { ResolveDuplicateUseCase } from 'src/application/usecases/book/resolve-duplicate.usecase';

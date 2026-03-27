@@ -16,6 +16,12 @@ import { EpubParserService } from 'src/infrastructure/parsers/epub-parser.servic
 import { OpenLibraryGateway } from 'src/infrastructure/gateways/open-library.gateway';
 import { GoogleBooksGateway } from 'src/infrastructure/gateways/google-books.gateway';
 import { CompositeMetadataGateway } from 'src/infrastructure/gateways/composite-metadata.gateway';
+import { LibraryScanQueueService } from 'src/infrastructure/services/library-scan-queue.service';
+import { FileProcessingQueueService } from 'src/infrastructure/services/file-processing-queue.service';
+import { TriggerLibraryScanUseCase } from 'src/application/usecases/library/trigger-library-scan.usecase';
+import { TriggerBookMetadataSyncUseCase } from 'src/application/usecases/library/trigger-book-metadata-sync.usecase';
+import { GetUnownedBooksUseCase } from 'src/application/usecases/book/get-unowned-books.usecase';
+import { GetOrphanedBooksUseCase } from 'src/application/usecases/book/get-orphaned-books.usecase';
 import { AuthModule } from 'src/modules/auth.module';
 import { SettingsModule } from 'src/modules/settings.module';
 
@@ -34,11 +40,18 @@ import { SettingsModule } from 'src/modules/settings.module';
     { provide: 'OpenLibraryGateway', useClass: OpenLibraryGateway },
     { provide: 'GoogleBooksGateway', useClass: GoogleBooksGateway },
     { provide: 'MetadataGateway', useClass: CompositeMetadataGateway },
+    { provide: 'LibraryScanQueue', useClass: LibraryScanQueueService },
+    { provide: 'FileProcessingQueue', useClass: FileProcessingQueueService },
     LibraryEventsService,
+    { provide: 'LibraryEventsService', useExisting: LibraryEventsService },
     FileWatcherService,
     LibraryScanProcessor,
     FileProcessingProcessor,
     LegacyRenameService,
+    TriggerLibraryScanUseCase,
+    TriggerBookMetadataSyncUseCase,
+    GetUnownedBooksUseCase,
+    GetOrphanedBooksUseCase,
   ],
   controllers: [LibrarySyncController],
 })

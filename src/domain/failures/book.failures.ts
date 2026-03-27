@@ -17,3 +17,9 @@ export class BookMissingMetadataFailure extends Failure {
     super('MISSING_METADATA', `Could not determine "${field}" from the EPUB file. Please provide it manually.`);
   }
 }
+
+export class BookContentEntryNotFoundFailure extends Failure {
+  constructor(entryPath: string) {
+    super('BOOK_CONTENT_ENTRY_NOT_FOUND', `Content entry "${entryPath}" not found in publication`);
+  }
+}

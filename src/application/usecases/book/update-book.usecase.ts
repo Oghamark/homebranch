@@ -2,8 +2,7 @@ import { Book } from 'src/domain/entities/book.entity';
 import { UpdateBookRequest } from '../../contracts/book/update-book-request';
 import { IBookRepository } from '../../interfaces/book-repository';
 import { Inject, Injectable } from '@nestjs/common';
-import { InjectQueue } from '@nestjs/bullmq';
-import { Queue } from 'bullmq';
+import { IFileProcessingQueue } from 'src/application/interfaces/file-processing-queue';
 import { Result } from 'src/core/result';
 import { UseCase } from 'src/core/usecase';
 import { BookFactory } from 'src/domain/entities/book.factory';
@@ -12,7 +11,7 @@ import { BookFactory } from 'src/domain/entities/book.factory';
 export class UpdateBookUseCase implements UseCase<UpdateBookRequest, Book> {
   constructor(
     @Inject('BookRepository') private bookRepository: IBookRepository,
-    @InjectQueue('file-processing') private fileProcessingQueue: Queue,
+    @Inject('FileProcessingQueue') private fileProcessingQueue: IFileProcessingQueue,
   ) {}
 
   async execute(request: UpdateBookRequest): Promise<Result<Book>> {
@@ -30,14 +29,11 @@ export class UpdateBookUseCase implements UseCase<UpdateBookRequest, Book> {
 
     if (updateResult.isSuccess()) {
       const uploadsDir = process.env.UPLOADS_DIRECTORY || './uploads';
-      await this.fileProcessingQueue.add(
-        'sync-metadata',
-        {
-          bookId: request.id,
-          fileName: updateResult.value.fileName,
-          filePath: `${uploadsDir}/books/${updateResult.value.fileName}`,
-        },
-        { jobId: `sync-${request.id}`, removeOnComplete: 100, removeOnFail: 50 },
+      await this.fileProcessingQueue.enqueueMetadataSync(
+        request.id,
+        updateResult.value.fileName,
+        `${uploadsDir}/books/${updateResult.value.fileName}`,
+        { jobId: `sync-${request.id}` },
       );
     }
 

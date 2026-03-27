@@ -13,8 +13,8 @@ import {
   UseFilters,
   UseGuards,
 } from '@nestjs/common';
-import { OpdsBasicAuthGuard } from 'src/infrastructure/guards/opds-basic-auth.guard';
-import { OpdsAuthExceptionFilter, buildOpdsAuthDocument } from 'src/infrastructure/filters/opds-auth-exception.filter';
+import { OpdsBasicAuthGuard } from 'src/presentation/guards/opds-basic-auth.guard';
+import { OpdsAuthExceptionFilter, buildOpdsAuthDocument } from 'src/presentation/filters/opds-auth-exception.filter';
 import { GetBooksUseCase } from 'src/application/usecases/book/get-books.usecase';
 import { GetBookShelvesUseCase } from 'src/application/usecases/bookshelf/get-book-shelves-use-case.service';
 import { GetBookShelfByIdUseCase } from 'src/application/usecases/bookshelf/get-book-shelf-by-id-use-case.service';

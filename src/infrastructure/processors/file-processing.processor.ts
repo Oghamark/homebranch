@@ -257,7 +257,7 @@ export class FileProcessingProcessor extends WorkerHost {
 
     const dbMetadata = SyncableMetadataHelper.fromBook(book);
     const lastSynced = (book.syncedMetadata as unknown as SyncableMetadata) || null;
-    const mergeResult = MetadataMerger.merge(fileMetadata, dbMetadata, lastSynced);
+    const mergeResult = MetadataMerger.merge(fileMetadata, dbMetadata, lastSynced, this.logger);
 
     const stat = statSync(filePath);
     let finalMtime = stat.mtimeMs;

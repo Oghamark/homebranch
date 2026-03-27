@@ -1,12 +1,12 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Put, UseGuards, UseInterceptors } from '@nestjs/common';
-import { JwtAuthGuard } from 'src/infrastructure/guards/jwt-auth.guard';
+import { JwtAuthGuard } from 'src/presentation/guards/jwt-auth.guard';
 import { MapResultInterceptor } from '../interceptors/map_result.interceptor';
 import { GetSavedPositionsUseCase } from 'src/application/usecases/saved-position/get-saved-positions.usecase';
 import { GetSavedPositionUseCase } from 'src/application/usecases/saved-position/get-saved-position.usecase';
 import { SavePositionUseCase } from 'src/application/usecases/saved-position/save-position.usecase';
 import { DeleteSavedPositionUseCase } from 'src/application/usecases/saved-position/delete-saved-position.usecase';
 import { SavePositionDto } from '../dtos/save-position.dto';
-import { CurrentUser } from 'src/infrastructure/decorators/current-user.decorator';
+import { CurrentUser } from 'src/presentation/decorators/current-user.decorator';
 
 @Controller('users/:userId/saved-positions')
 @UseInterceptors(MapResultInterceptor)

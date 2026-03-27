@@ -1,5 +1,5 @@
-import { Logger } from '@nestjs/common';
 import { SyncableMetadata } from 'src/domain/value-objects/syncable-metadata';
+import { IDomainLogger } from 'src/domain/ports/logger';
 
 export interface MergeResult {
   merged: SyncableMetadata;
@@ -22,12 +22,12 @@ const SYNCABLE_FIELDS: (keyof SyncableMetadata)[] = [
 ];
 
 export class MetadataMerger {
-  private static readonly logger = new Logger(MetadataMerger.name);
 
   static merge(
     fileMetadata: SyncableMetadata,
     dbMetadata: SyncableMetadata,
     lastSynced: SyncableMetadata | null,
+    logger?: IDomainLogger,
   ): MergeResult {
     if (!lastSynced) {
       return {
@@ -61,7 +61,7 @@ export class MetadataMerger {
         MetadataMerger.setField(merged, field, fileMetadata[field]);
         dbUpdated = true;
         conflicts.push(field);
-        this.logger.warn(`Metadata conflict on "${field}": file="${String(fileVal)}" wins over db="${String(dbVal)}"`);
+        logger?.warn(`Metadata conflict on "${field}": file="${String(fileVal)}" wins over db="${String(dbVal)}"`);
       }
     }
 
