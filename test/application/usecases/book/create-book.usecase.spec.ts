@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { IBookRepository } from 'src/application/interfaces/book-repository';
 import { IBookDuplicateRepository } from 'src/application/interfaces/book-duplicate-repository';
 import { IContentHashService } from 'src/application/interfaces/content-hash-service';
+import { IFileService } from 'src/application/interfaces/file-service';
 import { CreateBookUseCase } from 'src/application/usecases/book/create-book.usecase';
 import { IMetadataGateway } from 'src/application/interfaces/metadata-gateway';
 import { IEpubParser } from 'src/application/interfaces/epub-parser';
@@ -11,16 +12,6 @@ import { Result, UnexpectedFailure } from 'src/core/result';
 import { BookNotFoundFailure } from 'src/domain/failures/book.failures';
 import Mocked = jest.Mocked;
 
-jest.mock('fs/promises', () => ({
-  writeFile: jest.fn().mockResolvedValue(undefined),
-  unlink: jest.fn().mockResolvedValue(undefined),
-  rename: jest.fn().mockResolvedValue(undefined),
-}));
-
-jest.mock('fs', () => ({
-  existsSync: jest.fn().mockReturnValue(false),
-}));
-
 describe('CreateBookUseCase', () => {
   let useCase: CreateBookUseCase;
   let bookRepository: Mocked<IBookRepository>;
@@ -28,6 +19,7 @@ describe('CreateBookUseCase', () => {
   let contentHashService: Mocked<IContentHashService>;
   let metadataGateway: Mocked<IMetadataGateway>;
   let epubParser: Mocked<IEpubParser>;
+  let fileService: Mocked<IFileService>;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -53,6 +45,10 @@ describe('CreateBookUseCase', () => {
           provide: 'EpubParser',
           useValue: mock<IEpubParser>(),
         },
+        {
+          provide: 'FileService',
+          useValue: mock<IFileService>(),
+        },
       ],
     }).compile();
 
@@ -62,8 +58,13 @@ describe('CreateBookUseCase', () => {
     contentHashService = module.get('ContentHashService');
     metadataGateway = module.get('MetadataGateway');
     epubParser = module.get('EpubParser');
+    fileService = module.get('FileService');
     metadataGateway.enrichBook.mockResolvedValue(mockBook);
     epubParser.parse.mockResolvedValue({});
+    fileService.fileExists.mockReturnValue(false);
+    fileService.writeFile.mockResolvedValue(undefined);
+    fileService.moveFile.mockResolvedValue(undefined);
+    fileService.deleteFile.mockResolvedValue(undefined);
     // Default: no duplicate found, hash computation returns a stable hash
     bookRepository.findByContentHash.mockResolvedValue(Result.fail(new BookNotFoundFailure()));
     contentHashService.computeHash.mockResolvedValue('abc123hash');
