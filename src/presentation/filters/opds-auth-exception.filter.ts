@@ -1,5 +1,6 @@
 import { ArgumentsHost, Catch, ExceptionFilter, UnauthorizedException } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { buildExternalBaseUrl } from 'src/presentation/utils/external-url';
 
 export function buildOpdsAuthDocument(authDocUrl: string) {
   return {
@@ -32,9 +33,7 @@ export class OpdsAuthExceptionFilter implements ExceptionFilter {
     const request = http.getRequest<Request>();
     const response = http.getResponse<Response>();
 
-    const proto = String(request.headers['x-forwarded-proto'] ?? request.protocol);
-    const host_ = String(request.headers['x-forwarded-host'] ?? request.headers.host ?? 'localhost');
-    const baseUrl = `${proto}://${host_}`;
+    const baseUrl = buildExternalBaseUrl(request);
     const authDocUrl = `${baseUrl}/opds/v1/auth`;
 
     response

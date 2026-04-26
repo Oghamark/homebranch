@@ -26,6 +26,7 @@ import { UpdateAuthorUseCase } from 'src/application/usecases/author/update-auth
 import { UploadAuthorProfilePictureUseCase } from 'src/application/usecases/author/upload-author-profile-picture.usecase';
 import { PaginatedQuery } from 'src/core/paginated-query';
 import { UpdateAuthorDto } from '../dtos/update-author.dto';
+import { buildExternalBaseUrl } from 'src/presentation/utils/external-url';
 
 @Controller('authors')
 @UseInterceptors(MapResultInterceptor)
@@ -88,9 +89,7 @@ export class AuthorController {
     if (!file) {
       throw new BadRequestException('A file must be provided');
     }
-    const host = req.get('host');
-    const protocol = req.protocol;
-    const profilePictureUrl = `${protocol}://${host}/uploads/author-images/${file.filename}`;
+    const profilePictureUrl = `${buildExternalBaseUrl(req)}/uploads/author-images/${file.filename}`;
     return this.uploadAuthorProfilePictureUseCase.execute({
       name,
       profilePictureUrl,

@@ -52,6 +52,7 @@ import { BookFormatType } from 'src/domain/entities/book-format.entity';
 import { getBookFormatExtension, getBookFormatMediaType } from 'src/domain/services/book-format';
 import { LinkBooksUseCase } from 'src/application/usecases/book/link-books.usecase';
 import { UnlinkBookFormatUseCase } from 'src/application/usecases/book/unlink-book-format.usecase';
+import { buildExternalBaseUrl } from 'src/presentation/utils/external-url';
 
 class AssignOwnerDto {
   @IsUUID()
@@ -301,8 +302,7 @@ export class BookController {
     @Req() req: Request,
     @Res({ passthrough: true }) response: Response,
   ): Promise<object | void> {
-    const prefix = req.get('x-forwarded-prefix') ?? '';
-    const baseUrl = `${req.protocol}://${req.get('host')}${prefix}`;
+    const baseUrl = buildExternalBaseUrl(req, { includeForwardedPrefix: true });
     const result = await this.getBookManifestUseCase.execute({ id, baseUrl, format: query.format });
 
     if (result.isFailure()) {
