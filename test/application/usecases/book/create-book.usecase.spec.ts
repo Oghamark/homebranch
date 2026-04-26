@@ -17,6 +17,14 @@ import { BookNotFoundFailure } from 'src/domain/failures/book.failures';
 import { BookFormatProcessingService } from 'src/infrastructure/services/book-format-processing.service';
 import Mocked = jest.Mocked;
 
+function expectPathContaining(relativePath: string): ReturnType<typeof expect.stringMatching> {
+  const escapedSegments = relativePath
+    .split(/[\\/]/)
+    .map((segment) => segment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .join('[/\\\\]');
+  return expect.stringMatching(new RegExp(`${escapedSegments}$`));
+}
+
 describe('CreateBookUseCase', () => {
   let useCase: CreateBookUseCase;
   let bookRepository: Mocked<IBookRepository>;
@@ -438,8 +446,8 @@ describe('CreateBookUseCase', () => {
         ]),
       );
       expect(fileService.moveFile).toHaveBeenCalledWith(
-        expect.stringContaining('\\incoming\\uploaded-book.pdf'),
-        expect.stringContaining('\\books\\PDF Author - PDF Title.pdf'),
+        expectPathContaining('/incoming/uploaded-book.pdf'),
+        expectPathContaining('/books/PDF Author - PDF Title.pdf'),
       );
     });
 
@@ -532,8 +540,8 @@ describe('CreateBookUseCase', () => {
         ]),
       );
       expect(fileService.moveFile).toHaveBeenCalledWith(
-        expect.stringContaining('\\incoming\\fresh-upload.pdf'),
-        expect.stringContaining('\\books\\Shared Author - Shared Title.pdf'),
+        expectPathContaining('/incoming/fresh-upload.pdf'),
+        expectPathContaining('/books/Shared Author - Shared Title.pdf'),
       );
     });
   });
