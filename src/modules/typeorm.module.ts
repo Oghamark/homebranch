@@ -2,6 +2,7 @@ import { Logger, Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BookEntity } from 'src/infrastructure/database/book.entity';
+import { BookFormatEntity } from 'src/infrastructure/database/book-format.entity';
 import { UserBookFavoriteEntity } from 'src/infrastructure/database/user-book-favorite.entity';
 import { SnakeNamingStrategy } from 'typeorm-naming-strategies';
 import { BookShelfEntity } from '../infrastructure/database/book-shelf.entity';
@@ -25,6 +26,8 @@ import { AddUserBookFavoriteTable1773439568621 } from 'src/migrations/1773439568
 import { AddSyncAndSoftDeleteFields1773287271444 } from 'src/migrations/1773287271444-AddSyncAndSoftDeleteFields';
 import { BookDuplicateEntity } from 'src/infrastructure/database/book-duplicate.entity';
 import { AddBookDuplicateTable1773801937488 } from 'src/migrations/1773801937488-AddBookDuplicateTable';
+import { AddBookFormatTable1774652732886 } from 'src/migrations/1774652732886-AddBookFormatTable';
+import { AddMetadataToBookFormat1777224804830 } from 'src/migrations/1777224804830-AddMetadataToBookFormat';
 
 @Module({
   imports: [
@@ -56,6 +59,7 @@ import { AddBookDuplicateTable1773801937488 } from 'src/migrations/1773801937488
           database: database,
           entities: [
             BookEntity,
+            BookFormatEntity,
             BookShelfEntity,
             SavedPositionEntity,
             AuthorEntity,
@@ -80,6 +84,8 @@ import { AddBookDuplicateTable1773801937488 } from 'src/migrations/1773801937488
             AddSyncAndSoftDeleteFields1773287271444,
             AddUserBookFavoriteTable1773439568621,
             AddBookDuplicateTable1773801937488,
+            AddBookFormatTable1774652732886,
+            AddMetadataToBookFormat1777224804830,
           ],
           migrationsRun: true,
           migrationsTableName: 'migration_table',

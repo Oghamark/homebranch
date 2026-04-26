@@ -1,3 +1,5 @@
+import { BookFormat } from 'src/domain/entities/book-format.entity';
+
 export class Book {
   constructor(
     public id: string,
@@ -26,5 +28,6 @@ export class Book {
     public fileMtime?: number,
     public fileContentHash?: string,
     public metadataUpdatedAt?: Date,
+    public formats?: BookFormat[],
   ) {}
 }

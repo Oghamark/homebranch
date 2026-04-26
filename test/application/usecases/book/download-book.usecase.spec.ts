@@ -40,7 +40,11 @@ describe('DownloadBookUseCase', () => {
     expect(bookRepository.findById).toHaveBeenCalledTimes(1);
     expect(bookRepository.findById).toHaveBeenCalledWith(mockBook.id);
     expect(result.isSuccess()).toBe(true);
-    expect(result.value).toEqual(mockBook);
+    expect(result.value).toEqual({
+      book: mockBook,
+      format: 'EPUB',
+      fileName: mockBook.fileName,
+    });
   });
 
   test('Fails when book not found', async () => {

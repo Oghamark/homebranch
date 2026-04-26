@@ -21,6 +21,7 @@ import { GetBookShelfByIdUseCase } from 'src/application/usecases/bookshelf/get-
 import { GetBookShelfBooksUseCase } from 'src/application/usecases/bookshelf/get-book-shelf-books-use-case.service';
 import { GetOpdsNewArrivalsUseCase } from 'src/application/usecases/opds/get-opds-new-arrivals.usecase';
 import { DownloadBookUseCase } from 'src/application/usecases/book/download-book.usecase';
+import { getBookFormatExtension, getBookFormatMediaType } from 'src/domain/services/book-format';
 import { OpdsV1Builder } from 'src/presentation/opds/opds-v1.builder';
 import { OPDS_MEDIA_TYPE } from 'src/presentation/opds/opds-link.helper';
 import { Request, Response } from 'express';
@@ -137,10 +138,10 @@ export class OpdsV1Controller {
       return;
     }
 
-    const book = result.value!;
+    const { book, format, fileName } = result.value!;
     const sanitizedTitle = book.title.replace(/[^\w\s-]/g, '').trim() || 'book';
     const uploadsDirectory = process.env.UPLOADS_DIRECTORY || './uploads';
-    const safeFileName = basename(book.fileName);
+    const safeFileName = basename(fileName);
     const filePath = join(uploadsDirectory, 'books', safeFileName);
 
     if (!existsSync(filePath)) {
@@ -157,8 +158,8 @@ export class OpdsV1Controller {
     });
 
     return new StreamableFile(fileStream, {
-      type: 'application/epub+zip',
-      disposition: `attachment; filename="${sanitizedTitle}.epub"`,
+      type: getBookFormatMediaType(format),
+      disposition: `attachment; filename="${sanitizedTitle}${getBookFormatExtension(format)}"`,
     });
   }
 }

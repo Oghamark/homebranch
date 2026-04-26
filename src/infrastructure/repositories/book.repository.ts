@@ -1,23 +1,34 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { BookSearchFilters, IBookRepository } from 'src/application/interfaces/book-repository';
-import { IsNull, Repository } from 'typeorm';
+import { In, IsNull, Repository } from 'typeorm';
 import { BookEntity } from 'src/infrastructure/database/book.entity';
 import { UserBookFavoriteEntity } from 'src/infrastructure/database/user-book-favorite.entity';
 import { BookMapper } from '../mappers/book.mapper';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Book } from 'src/domain/entities/book.entity';
+import { BookFormatEntity } from 'src/infrastructure/database/book-format.entity';
 import { existsSync, unlinkSync } from 'fs';
+import { randomUUID } from 'crypto';
 import { join } from 'path';
 import { BookNotFoundFailure } from 'src/domain/failures/book.failures';
 import { Result } from 'src/core/result';
 import { PaginationResult } from 'src/core/pagination_result';
 import { BookShelf } from 'src/domain/entities/bookshelf.entity';
+import { BookFormatProcessingService } from 'src/infrastructure/services/book-format-processing.service';
+import { IFileService } from 'src/application/interfaces/file-service';
+import { BookFileMetadata } from 'src/application/interfaces/book-metadata-parser';
+import { buildBookFormatMetadata, hasStoredFormatMetadata } from 'src/domain/services/book-format-metadata';
 
 @Injectable()
 export class TypeOrmBookRepository implements IBookRepository {
+  private readonly logger = new Logger(TypeOrmBookRepository.name);
+
   constructor(
     @InjectRepository(BookEntity) private readonly repository: Repository<BookEntity>,
+    @InjectRepository(BookFormatEntity) private readonly formatRepository: Repository<BookFormatEntity>,
     @InjectRepository(UserBookFavoriteEntity) private readonly favoriteRepository: Repository<UserBookFavoriteEntity>,
+    @Inject('FileService') private readonly fileService: IFileService,
+    private readonly bookFormatProcessingService: BookFormatProcessingService,
   ) {}
 
   async create(entity: Book): Promise<Result<Book>> {
@@ -54,9 +65,13 @@ export class TypeOrmBookRepository implements IBookRepository {
   }
 
   async findById(id: string, viewerUserId?: string): Promise<Result<Book>> {
-    const bookEntity = (await this.repository.findOne({ where: { id, deletedAt: IsNull() } })) || null;
+    const bookEntity = (await this.repository.findOne({
+      where: { id, deletedAt: IsNull() },
+      relations: { formats: true },
+    })) || null;
     if (!bookEntity) return Result.fail(new BookNotFoundFailure());
-    const book = BookMapper.toDomain(bookEntity);
+    const hydratedEntity = await this.hydrateFormatMetadata(bookEntity);
+    const book = BookMapper.toDomain(hydratedEntity);
     if (viewerUserId) {
       await this.applyFavoriteStatus([book], viewerUserId);
     }
@@ -90,13 +105,42 @@ export class TypeOrmBookRepository implements IBookRepository {
   }
 
   async update(id: string, book: Book): Promise<Result<Book>> {
-    const exists = await this.repository.existsBy({ id: id });
+    const existing = await this.repository.findOne({
+      where: { id },
+      relations: { formats: true },
+    });
 
-    if (!exists) return Result.fail(new BookNotFoundFailure());
+    if (!existing) return Result.fail(new BookNotFoundFailure());
 
-    const bookEntity = BookMapper.toPersistence(book);
-    await this.repository.save(bookEntity);
-    return Result.ok(BookMapper.toDomain(bookEntity));
+    const persistence = BookMapper.toPersistence(book);
+    this.applyPersistence(existing, persistence);
+
+    await this.repository.manager.transaction(async (manager) => {
+      await this.saveBookWithFormats(manager, existing, persistence);
+    });
+
+    return this.findPersistedBook(id);
+  }
+
+  async splitFormat(bookId: string, updatedBook: Book, splitBook: Book): Promise<Result<Book>> {
+    const existing = await this.repository.findOne({
+      where: { id: bookId },
+      relations: { formats: true },
+    });
+
+    if (!existing) return Result.fail(new BookNotFoundFailure());
+
+    const updatedPersistence = BookMapper.toPersistence(updatedBook);
+    const splitPersistence = BookMapper.toPersistence(splitBook);
+
+    this.applyPersistence(existing, updatedPersistence);
+
+    await this.repository.manager.transaction(async (manager) => {
+      await this.saveBookWithFormats(manager, existing, updatedPersistence);
+      await manager.getRepository(BookEntity).save(splitPersistence);
+    });
+
+    return this.findPersistedBook(bookId);
   }
 
   async delete(id: string): Promise<Result<Book>> {
@@ -104,13 +148,16 @@ export class TypeOrmBookRepository implements IBookRepository {
   }
 
   async permanentDelete(id: string): Promise<Result<Book>> {
-    const bookEntity = await this.repository.findOne({ where: { id } });
+    const bookEntity = await this.repository.findOne({ where: { id }, relations: { formats: true } });
     if (!bookEntity) return Result.fail(new BookNotFoundFailure());
 
     const book = BookMapper.toDomain(bookEntity);
     const uploadsDir = process.env.UPLOADS_DIRECTORY || join(process.cwd(), 'uploads');
-    if (existsSync(join(uploadsDir, 'books', book.fileName))) {
-      unlinkSync(join(uploadsDir, 'books', book.fileName));
+    const fileNames = new Set(book.formats?.map((format) => format.fileName) ?? [book.fileName]);
+    for (const fileName of fileNames) {
+      if (existsSync(join(uploadsDir, 'books', fileName))) {
+        unlinkSync(join(uploadsDir, 'books', fileName));
+      }
     }
     if (book.coverImageFileName && existsSync(join(uploadsDir, 'cover-images', book.coverImageFileName))) {
       unlinkSync(join(uploadsDir, 'cover-images', book.coverImageFileName));
@@ -140,21 +187,33 @@ export class TypeOrmBookRepository implements IBookRepository {
   }
 
   async findByFileName(fileName: string, includeDeleted = false): Promise<Result<Book>> {
-    const where = includeDeleted ? { fileName } : { fileName, deletedAt: IsNull() };
-    const bookEntity = await this.repository.findOne({ where });
+    const qb = this.repository
+      .createQueryBuilder('book')
+      .leftJoinAndSelect('book.formats', 'format')
+      .where('(book.file_name = :fileName OR format.file_name = :fileName)', { fileName });
+    if (!includeDeleted) {
+      qb.andWhere('book.deletedAt IS NULL');
+    }
+    const bookEntity = await qb.getOne();
     if (bookEntity) return Result.ok(BookMapper.toDomain(bookEntity));
     return Result.fail(new BookNotFoundFailure());
   }
 
   async findByContentHash(hash: string, includeDeleted = false): Promise<Result<Book>> {
-    const where = includeDeleted ? { fileContentHash: hash } : { fileContentHash: hash, deletedAt: IsNull() };
-    const bookEntity = await this.repository.findOne({ where });
+    const qb = this.repository
+      .createQueryBuilder('book')
+      .leftJoinAndSelect('book.formats', 'format')
+      .where('(book.file_content_hash = :hash OR format.file_content_hash = :hash)', { hash });
+    if (!includeDeleted) {
+      qb.andWhere('book.deletedAt IS NULL');
+    }
+    const bookEntity = await qb.getOne();
     if (bookEntity) return Result.ok(BookMapper.toDomain(bookEntity));
     return Result.fail(new BookNotFoundFailure());
   }
 
   async findAllActive(): Promise<Result<Book[]>> {
-    const bookEntities = await this.repository.find({ where: { deletedAt: IsNull() } });
+    const bookEntities = await this.repository.find({ where: { deletedAt: IsNull() }, relations: { formats: true } });
     return Result.ok(BookMapper.toDomainList(bookEntities));
   }
 
@@ -484,5 +543,139 @@ export class TypeOrmBookRepository implements IBookRepository {
       total,
       nextCursor: limit && total > (offset || 0) + limit ? (offset || 0) + limit : null,
     });
+  }
+
+  private applyPersistence(existing: BookEntity, persistence: BookEntity): void {
+    existing.title = persistence.title;
+    existing.author = persistence.author;
+    existing.fileName = persistence.fileName;
+    existing.isFavorite = persistence.isFavorite;
+    existing.genres = persistence.genres;
+    existing.publishedYear = persistence.publishedYear;
+    existing.coverImageFileName = persistence.coverImageFileName;
+    existing.summary = persistence.summary;
+    existing.uploadedByUserId = persistence.uploadedByUserId;
+    existing.series = persistence.series;
+    existing.seriesPosition = persistence.seriesPosition;
+    existing.isbn = persistence.isbn;
+    existing.pageCount = persistence.pageCount;
+    existing.publisher = persistence.publisher;
+    existing.language = persistence.language;
+    existing.averageRating = persistence.averageRating;
+    existing.ratingsCount = persistence.ratingsCount;
+    existing.metadataFetchedAt = persistence.metadataFetchedAt;
+    existing.lastSyncedAt = persistence.lastSyncedAt;
+    existing.syncedMetadata = persistence.syncedMetadata;
+    existing.fileMtime = persistence.fileMtime;
+    existing.fileContentHash = persistence.fileContentHash;
+    existing.metadataUpdatedAt = persistence.metadataUpdatedAt;
+    existing.deletedAt = persistence.deletedAt;
+  }
+
+  private async saveBookWithFormats(
+    manager: Repository<BookEntity>['manager'],
+    existing: BookEntity,
+    persistence: BookEntity,
+  ): Promise<void> {
+    const bookRepository = manager.getRepository(BookEntity);
+    const formatRepository = manager.getRepository(BookFormatEntity);
+
+    await bookRepository.save(existing);
+
+    if (persistence.formats === undefined) {
+      return;
+    }
+
+    const nextFormats = persistence.formats.map((format) => {
+      format.bookId = existing.id;
+      return format;
+    });
+    const nextFormatIds = new Set(nextFormats.map((format) => format.id));
+    const removedFormatIds = (existing.formats ?? [])
+      .filter((format) => !nextFormatIds.has(format.id))
+      .map((format) => format.id);
+
+    if (removedFormatIds.length > 0) {
+      await formatRepository.delete({ id: In(removedFormatIds) });
+    }
+
+    if (nextFormats.length > 0) {
+      await formatRepository.save(nextFormats);
+    }
+  }
+
+  private async findPersistedBook(id: string): Promise<Result<Book>> {
+    const updated = await this.repository.findOne({
+      where: { id },
+      relations: { formats: true },
+    });
+
+    if (!updated) return Result.fail(new BookNotFoundFailure());
+    return Result.ok(BookMapper.toDomain(await this.hydrateFormatMetadata(updated)));
+  }
+
+  private async hydrateFormatMetadata(bookEntity: BookEntity): Promise<BookEntity> {
+    const formats = bookEntity.formats ?? [];
+    const missingFormats = formats.filter((format) => !hasStoredFormatMetadata(format));
+    if (missingFormats.length === 0) {
+      return bookEntity;
+    }
+
+    let hasUpdates = false;
+
+    for (const format of missingFormats) {
+      const parsedMetadata = await this.parseStoredFormatMetadata(format);
+      const coverImageFileName = format.coverImageFileName ?? (await this.extractCoverImage(parsedMetadata));
+      const metadata = buildBookFormatMetadata(parsedMetadata, format.fileName, coverImageFileName);
+
+      format.title = metadata.title ?? bookEntity.title;
+      format.author = metadata.author ?? bookEntity.author;
+      format.genres = metadata.genres;
+      format.publishedYear = metadata.publishedYear;
+      format.coverImageFileName = metadata.coverImageFileName;
+      format.summary = metadata.summary;
+      format.series = metadata.series;
+      format.seriesPosition = metadata.seriesPosition;
+      format.isbn = metadata.isbn;
+      format.pageCount = metadata.pageCount;
+      format.publisher = metadata.publisher;
+      format.language = metadata.language;
+      hasUpdates = true;
+    }
+
+    if (!hasUpdates) {
+      return bookEntity;
+    }
+
+    await this.formatRepository.save(missingFormats);
+    return (
+      (await this.repository.findOne({
+        where: { id: bookEntity.id },
+        relations: { formats: true },
+      })) ?? bookEntity
+    );
+  }
+
+  private async parseStoredFormatMetadata(format: BookFormatEntity): Promise<BookFileMetadata> {
+    const uploadsDirectory = process.env.UPLOADS_DIRECTORY || './uploads';
+    const filePath = join(uploadsDirectory, 'books', format.fileName);
+
+    try {
+      return await this.bookFormatProcessingService.parseMetadata(filePath, format.format);
+    } catch (error) {
+      this.logger.warn(`Could not parse metadata for format "${format.fileName}": ${String(error)}`);
+      return {};
+    }
+  }
+
+  private async extractCoverImage(fileMetadata: BookFileMetadata): Promise<string | undefined> {
+    if (!fileMetadata.coverImageBuffer) {
+      return undefined;
+    }
+
+    const uploadsDirectory = process.env.UPLOADS_DIRECTORY || './uploads';
+    const coverImageFileName = `${randomUUID()}.jpg`;
+    await this.fileService.writeFile(join(uploadsDirectory, 'cover-images', coverImageFileName), fileMetadata.coverImageBuffer);
+    return coverImageFileName;
   }
 }

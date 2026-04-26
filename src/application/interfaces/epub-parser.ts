@@ -1,18 +1,5 @@
-export interface IEpubMetadata {
-  title?: string;
-  author?: string;
-  language?: string;
-  publisher?: string;
-  publishedYear?: number;
-  isbn?: string;
-  summary?: string;
-  genres?: string[];
-  series?: string;
-  seriesPosition?: number;
-  coverImageBuffer?: Buffer;
-  coverImageMimeType?: string;
-}
+import { BookFileMetadata, IBookMetadataParser } from 'src/application/interfaces/book-metadata-parser';
 
-export interface IEpubParser {
-  parse(filePath: string): Promise<IEpubMetadata>;
-}
+export interface IEpubMetadata extends BookFileMetadata {}
+
+export interface IEpubParser extends IBookMetadataParser {}

@@ -30,7 +30,7 @@ import { GetBookByIdUseCase } from 'src/application/usecases/book/get-book-by-id
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { randomUUID } from 'crypto';
-import { basename, join } from 'path';
+import { basename, extname, join } from 'path';
 import { DeleteBookRequest } from 'src/application/contracts/book/delete-book-request';
 import { GetFavoriteBooksUseCase } from 'src/application/usecases/book/get-favorite-books-use-case.service';
 import { ToggleBookFavoriteUseCase } from 'src/application/usecases/book/toggle-book-favorite-use-case.service';
@@ -48,11 +48,23 @@ import { FetchBookSummaryUseCase } from 'src/application/usecases/book/fetch-boo
 import { CurrentUser } from 'src/presentation/decorators/current-user.decorator';
 import { IsOptional, IsUUID } from 'class-validator';
 import { Result } from 'src/core/result';
+import { BookFormatType } from 'src/domain/entities/book-format.entity';
+import { getBookFormatExtension, getBookFormatMediaType } from 'src/domain/services/book-format';
+import { LinkBooksUseCase } from 'src/application/usecases/book/link-books.usecase';
+import { UnlinkBookFormatUseCase } from 'src/application/usecases/book/unlink-book-format.usecase';
 
 class AssignOwnerDto {
   @IsUUID()
   @IsOptional()
   userId: string | null;
+}
+
+class BookFormatQueryDto {
+  @IsOptional()
+  format?: BookFormatType;
+
+  @IsOptional()
+  inline?: string;
 }
 
 class BulkAssignOwnerDto {
@@ -62,6 +74,11 @@ class BulkAssignOwnerDto {
   @IsUUID()
   @IsOptional()
   userId: string | null;
+}
+
+class LinkBooksDto {
+  @IsUUID()
+  sourceBookId: string;
 }
 
 @Controller('books')
@@ -79,6 +96,8 @@ export class BookController {
     private readonly getBookContentUseCase: GetBookContentUseCase,
     private readonly fetchBookMetadataUseCase: FetchBookMetadataUseCase,
     private readonly fetchBookSummaryUseCase: FetchBookSummaryUseCase,
+    private readonly linkBooksUseCase: LinkBooksUseCase,
+    private readonly unlinkBookFormatUseCase: UnlinkBookFormatUseCase,
     private readonly assignBookOwnerUseCase: AssignBookOwnerUseCase,
     private readonly toggleBookFavoriteUseCase: ToggleBookFavoriteUseCase,
   ) {}
@@ -145,7 +164,8 @@ export class BookController {
           ) => {
             const fileName = randomUUID();
             if (_file.fieldname === 'file') {
-              cb(null, `${fileName}.epub`);
+              const extension = extname(_file.originalname).toLowerCase();
+              cb(null, `${fileName}${extension}`);
               return;
             } else if (_file.fieldname === 'coverImage') {
               cb(null, `${fileName}.jpg`);
@@ -170,6 +190,7 @@ export class BookController {
     const bookRequest: CreateBookRequest = {
       ...createBookRequest,
       fileName: files.file!.at(0)!.filename,
+      originalFileName: files.file!.at(0)!.originalname,
       coverImageFileName: files.coverImage?.at(0)?.filename,
       uploadedByUserId: currentUser.id,
     };
@@ -234,6 +255,28 @@ export class BookController {
     return this.updateBookUseCase.execute(updateBookRequest);
   }
 
+  @Post(':id/link')
+  @UseGuards(JwtAuthGuard)
+  linkBooks(@Param('id') id: string, @Body() dto: LinkBooksDto, @CurrentUser() currentUser: Express.User) {
+    return this.linkBooksUseCase.execute({
+      targetBookId: id,
+      sourceBookId: dto.sourceBookId,
+      requestingUserId: currentUser.id,
+      requestingUserRole: currentUser.roles?.includes('ADMIN') ? 'ADMIN' : 'USER',
+    });
+  }
+
+  @Delete(':id/formats/:formatId')
+  @UseGuards(JwtAuthGuard)
+  unlinkBookFormat(@Param('id') id: string, @Param('formatId') formatId: string, @CurrentUser() currentUser: Express.User) {
+    return this.unlinkBookFormatUseCase.execute({
+      bookId: id,
+      formatId,
+      requestingUserId: currentUser.id,
+      requestingUserRole: currentUser.roles?.includes('ADMIN') ? 'ADMIN' : 'USER',
+    });
+  }
+
   @Post(':id/fetch-metadata')
   @UseGuards(JwtAuthGuard)
   fetchBookMetadata(@Param('id') id: string) {
@@ -250,12 +293,13 @@ export class BookController {
   @UseGuards(JwtAuthGuard)
   async getBookManifest(
     @Param('id') id: string,
+    @Query() query: BookFormatQueryDto,
     @Req() req: Request,
     @Res({ passthrough: true }) response: Response,
   ): Promise<object | void> {
     const prefix = req.get('x-forwarded-prefix') ?? '';
     const baseUrl = `${req.protocol}://${req.get('host')}${prefix}`;
-    const result = await this.getBookManifestUseCase.execute({ id, baseUrl });
+    const result = await this.getBookManifestUseCase.execute({ id, baseUrl, format: query.format });
 
     if (result.isFailure()) {
       response.status(404).json({ success: false, error: result.failure.code, message: result.failure.message });
@@ -268,12 +312,17 @@ export class BookController {
 
   @Get(':id/content/*')
   @UseGuards(JwtAuthGuard)
-  async getBookContent(@Param('id') id: string, @Req() req: Request, @Res() response: Response): Promise<void> {
+  async getBookContent(
+    @Param('id') id: string,
+    @Query() query: BookFormatQueryDto,
+    @Req() req: Request,
+    @Res() response: Response,
+  ): Promise<void> {
     // Extract the entry path from the URL, after /content/
     const rawPath = req.url.split(`/content/`)[1]?.split('?')[0] ?? '';
     const entryPath = rawPath.split('/').map(decodeURIComponent).join('/');
 
-    const result = await this.getBookContentUseCase.execute({ id, entryPath });
+    const result = await this.getBookContentUseCase.execute({ id, entryPath, format: query.format });
 
     if (result.isFailure()) {
       response.status(404).json({ success: false, error: result.failure.code, message: result.failure.message });
@@ -290,19 +339,20 @@ export class BookController {
   @UseGuards(JwtAuthGuard)
   async downloadBook(
     @Param('id') id: string,
+    @Query() query: BookFormatQueryDto,
     @Res({ passthrough: true }) response: Response,
   ): Promise<StreamableFile | void> {
-    const result = await this.downloadBookUseCase.execute({ id });
+    const result = await this.downloadBookUseCase.execute({ id, format: query.format });
 
     if (result.isFailure()) {
       response.status(404).json({ success: false, error: result.failure.code, message: result.failure.message });
       return;
     }
 
-    const book = result.value!;
+    const { book, format, fileName } = result.value!;
     const sanitizedTitle = book.title.replace(/[^\w\s-]/g, '').trim() || 'book';
     const uploadsDirectory = process.env.UPLOADS_DIRECTORY || './uploads';
-    const safeFileName = basename(book.fileName);
+    const safeFileName = basename(fileName);
     const filePath = join(uploadsDirectory, 'books', safeFileName);
 
     if (!existsSync(filePath)) {
@@ -319,8 +369,10 @@ export class BookController {
     });
 
     return new StreamableFile(fileStream, {
-      type: 'application/epub+zip',
-      disposition: `attachment; filename="${sanitizedTitle}.epub"`,
+      type: getBookFormatMediaType(format),
+      disposition: `${query.inline === 'true' ? 'inline' : 'attachment'}; filename="${sanitizedTitle}${getBookFormatExtension(
+        format,
+      )}"`,
     });
   }
 }

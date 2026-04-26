@@ -1,5 +1,6 @@
-import { Column, CreateDateColumn, Entity, ManyToMany, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, CreateDateColumn, Entity, ManyToMany, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
 import { BookShelfEntity } from 'src/infrastructure/database/book-shelf.entity';
+import { BookFormatEntity } from 'src/infrastructure/database/book-format.entity';
 
 @Entity()
 export class BookEntity {
@@ -91,4 +92,10 @@ export class BookEntity {
 
   @ManyToMany(() => BookShelfEntity, (bookShelf) => bookShelf.books)
   bookShelves?: BookShelfEntity[];
+
+  @OneToMany(() => BookFormatEntity, (format) => format.book, {
+    cascade: true,
+    orphanedRowAction: 'delete',
+  })
+  formats?: BookFormatEntity[];
 }

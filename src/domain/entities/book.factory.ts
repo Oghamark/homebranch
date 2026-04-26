@@ -1,4 +1,5 @@
 import { Book } from 'src/domain/entities/book.entity';
+import { BookFormat } from 'src/domain/entities/book-format.entity';
 
 export class BookFactory {
   static create(
@@ -28,6 +29,7 @@ export class BookFactory {
     fileMtime?: number,
     fileContentHash?: string,
     metadataUpdatedAt?: Date,
+    formats?: BookFormat[],
   ): Book {
     if (!title || !author) {
       throw new Error('Title and author are required to create a book.');
@@ -60,6 +62,7 @@ export class BookFactory {
       fileMtime,
       fileContentHash,
       metadataUpdatedAt,
+      formats,
     );
   }
 
@@ -91,6 +94,7 @@ export class BookFactory {
       overrides.fileMtime ?? book.fileMtime,
       overrides.fileContentHash ?? book.fileContentHash,
       overrides.metadataUpdatedAt ?? book.metadataUpdatedAt,
+      overrides.formats ?? book.formats,
     );
   }
 }

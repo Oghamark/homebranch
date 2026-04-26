@@ -1,5 +1,7 @@
 import { Book } from 'src/domain/entities/book.entity';
+import { BookFormat } from 'src/domain/entities/book-format.entity';
 import { BookEntity } from 'src/infrastructure/database/book.entity';
+import { BookFormatEntity } from 'src/infrastructure/database/book-format.entity';
 import { BookFactory } from 'src/domain/entities/book.factory';
 
 export class BookMapper {
@@ -31,6 +33,7 @@ export class BookMapper {
       bookEntity.fileMtime,
       bookEntity.fileContentHash,
       bookEntity.metadataUpdatedAt,
+      bookEntity.formats?.map((format) => this.toDomainFormat(format)),
     );
   }
 
@@ -62,6 +65,7 @@ export class BookMapper {
       fileMtime: book.fileMtime,
       fileContentHash: book.fileContentHash,
       metadataUpdatedAt: book.metadataUpdatedAt,
+      formats: book.formats?.map((format) => this.toPersistenceFormat(format, book.id)),
     };
   }
 
@@ -71,5 +75,52 @@ export class BookMapper {
 
   static toPersistenceList(bookList: Book[]): BookEntity[] {
     return bookList.map((book) => this.toPersistence(book));
+  }
+
+  private static toDomainFormat(formatEntity: BookFormatEntity): BookFormat {
+    return new BookFormat({
+      id: formatEntity.id,
+      format: formatEntity.format,
+      fileName: formatEntity.fileName,
+      fileMtime: formatEntity.fileMtime,
+      fileContentHash: formatEntity.fileContentHash,
+      createdAt: formatEntity.createdAt,
+      title: formatEntity.title,
+      author: formatEntity.author,
+      genres: formatEntity.genres,
+      publishedYear: formatEntity.publishedYear,
+      coverImageFileName: formatEntity.coverImageFileName,
+      summary: formatEntity.summary,
+      series: formatEntity.series,
+      seriesPosition: formatEntity.seriesPosition,
+      isbn: formatEntity.isbn,
+      pageCount: formatEntity.pageCount,
+      publisher: formatEntity.publisher,
+      language: formatEntity.language,
+    });
+  }
+
+  private static toPersistenceFormat(format: BookFormat, bookId: string): BookFormatEntity {
+    const entity = new BookFormatEntity();
+    entity.id = format.id;
+    entity.bookId = bookId;
+    entity.format = format.format;
+    entity.fileName = format.fileName;
+    entity.fileMtime = format.fileMtime;
+    entity.fileContentHash = format.fileContentHash;
+    entity.title = format.title;
+    entity.author = format.author;
+    entity.genres = format.genres;
+    entity.publishedYear = format.publishedYear;
+    entity.coverImageFileName = format.coverImageFileName;
+    entity.summary = format.summary;
+    entity.series = format.series;
+    entity.seriesPosition = format.seriesPosition;
+    entity.isbn = format.isbn;
+    entity.pageCount = format.pageCount;
+    entity.publisher = format.publisher;
+    entity.language = format.language;
+    entity.createdAt = format.createdAt ?? new Date();
+    return entity;
   }
 }

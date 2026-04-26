@@ -2,19 +2,36 @@ import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Inject, Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { statSync, existsSync, renameSync } from 'fs';
-import { join, basename } from 'path';
+import { join, basename, extname } from 'path';
 import { randomUUID } from 'crypto';
 import { writeFile } from 'fs/promises';
 import { IBookRepository } from 'src/application/interfaces/book-repository';
-import { IEpubParser } from 'src/application/interfaces/epub-parser';
+import { BookFileMetadata } from 'src/application/interfaces/book-metadata-parser';
 import { IContentHashService } from 'src/application/interfaces/content-hash-service';
-import { IEpubMetadataWriter } from 'src/application/interfaces/epub-metadata-writer';
 import { IMetadataGateway } from 'src/application/interfaces/metadata-gateway';
 import { ISettingRepository } from 'src/application/interfaces/setting-repository';
+import { Result } from 'src/core/result';
 import { BookFactory } from 'src/domain/entities/book.factory';
+import { Book } from 'src/domain/entities/book.entity';
+import { BookFormat, BookFormatProps } from 'src/domain/entities/book-format.entity';
+import {
+  detectBookFormatFromFileName,
+  getAvailableBookFormatsFromBook,
+  getBookFormatByFileName,
+  getPreferredBookFormat,
+} from 'src/domain/services/book-format';
+import {
+  buildBookFormatMetadata,
+  cloneBookFormat,
+  withBookMetadataFallback,
+} from 'src/domain/services/book-format-metadata';
+import { fillBookMetadataFromFileName } from 'src/domain/services/book-file-metadata';
 import { SyncableMetadata, SyncableMetadataHelper } from 'src/domain/value-objects/syncable-metadata';
+import { logicalBookMatches } from 'src/domain/services/book-deduplication.service';
+import { BookNotFoundFailure } from 'src/domain/failures/book.failures';
 import { MetadataMerger } from 'src/domain/services/metadata-merger';
 import { LibraryEventsService } from 'src/infrastructure/services/library-events.service';
+import { BookFormatProcessingService } from 'src/infrastructure/services/book-format-processing.service';
 
 @Processor('file-processing')
 export class FileProcessingProcessor extends WorkerHost {
@@ -22,12 +39,11 @@ export class FileProcessingProcessor extends WorkerHost {
 
   constructor(
     @Inject('BookRepository') private readonly bookRepository: IBookRepository,
-    @Inject('EpubParser') private readonly epubParser: IEpubParser,
     @Inject('ContentHashService') private readonly contentHashService: IContentHashService,
-    @Inject('EpubMetadataWriter') private readonly epubMetadataWriter: IEpubMetadataWriter,
     @Inject('MetadataGateway') private readonly metadataGateway: IMetadataGateway,
     @Inject('SettingRepository') private readonly settingRepository: ISettingRepository,
     private readonly libraryEventsService: LibraryEventsService,
+    private readonly bookFormatProcessingService: BookFormatProcessingService,
   ) {
     super();
   }
@@ -54,6 +70,12 @@ export class FileProcessingProcessor extends WorkerHost {
   private async processNewFile(job: Job<{ fileName: string; filePath: string }>) {
     const { fileName, filePath } = job.data;
     this.logger.log(`Processing new file: ${fileName}`);
+    const detectedFormat = detectBookFormatFromFileName(fileName);
+    if (!detectedFormat) {
+      this.logger.warn(`Unsupported file format for "${fileName}"`);
+      await job.updateProgress(100);
+      return;
+    }
     await job.updateProgress(10);
 
     const contentHash = await this.contentHashService.computeHash(filePath);
@@ -64,8 +86,8 @@ export class FileProcessingProcessor extends WorkerHost {
     if (byNameResult.isSuccess() && byNameResult.value.deletedAt) {
       this.logger.log(`Restoring soft-deleted book by filename: "${byNameResult.value.title}"`);
       await this.bookRepository.restore(byNameResult.value.id);
-      await this.updateBookFileMetadata(byNameResult.value.id, filePath, contentHash);
-      await this.performMetadataSync(byNameResult.value.id, filePath);
+      await this.updateBookFileMetadata(byNameResult.value.id, fileName, filePath, contentHash);
+      await this.performMetadataSync(byNameResult.value.id, filePath, fileName);
       this.libraryEventsService.emit({ type: 'book-added', bookId: byNameResult.value.id });
       await job.updateProgress(100);
       return;
@@ -77,10 +99,21 @@ export class FileProcessingProcessor extends WorkerHost {
       this.logger.log(
         `Restoring soft-deleted book by content hash: "${byHashResult.value.title}" (was "${byHashResult.value.fileName}")`,
       );
-      const book = BookFactory.reconstitute(byHashResult.value, { fileName, deletedAt: undefined });
+      const stat = statSync(filePath);
+      const restoredFormat = withBookMetadataFallback(
+        new BookFormat({
+          id: randomUUID(),
+          format: detectedFormat,
+          fileName,
+          fileMtime: stat.mtimeMs,
+          fileContentHash: contentHash,
+        }),
+        byHashResult.value,
+      );
+      const book = this.withUpsertedFormat(byHashResult.value, restoredFormat, { deletedAt: undefined });
       await this.bookRepository.update(byHashResult.value.id, book);
       await this.bookRepository.restore(byHashResult.value.id);
-      await this.updateBookFileMetadata(byHashResult.value.id, filePath, contentHash);
+      await this.updateBookFileMetadata(byHashResult.value.id, fileName, filePath, contentHash);
       this.libraryEventsService.emit({ type: 'book-added', bookId: byHashResult.value.id });
       await job.updateProgress(100);
       return;
@@ -89,9 +122,10 @@ export class FileProcessingProcessor extends WorkerHost {
     // Already exists and active — check if file content changed
     if (byNameResult.isSuccess() && !byNameResult.value.deletedAt) {
       const existingBook = byNameResult.value;
-      if (existingBook.fileContentHash !== contentHash) {
+      const existingFormat = getBookFormatByFileName(existingBook, fileName);
+      if (existingFormat?.fileContentHash !== contentHash) {
         this.logger.log(`File content changed for existing book "${existingBook.title}", syncing metadata`);
-        await this.performMetadataSync(existingBook.id, filePath);
+        await this.performMetadataSync(existingBook.id, filePath, fileName);
       } else {
         this.logger.debug(`Book already exists and unchanged: ${fileName}`);
       }
@@ -99,61 +133,82 @@ export class FileProcessingProcessor extends WorkerHost {
       return;
     }
 
-    // New book — parse EPUB metadata
+    // New book or new format — parse file metadata
     await job.updateProgress(40);
     const uploadsDirectory = process.env.UPLOADS_DIRECTORY || './uploads';
 
-    let title: string | undefined;
-    let author: string | undefined;
-    let epubMeta: Awaited<ReturnType<typeof this.epubParser.parse>> = {};
-
-    try {
-      epubMeta = await this.epubParser.parse(filePath);
-      title = epubMeta.title;
-      author = epubMeta.author;
-    } catch (err) {
-      this.logger.warn(`Could not parse EPUB metadata for "${fileName}": ${String(err)}`);
-    }
+    const fileMetadata = await this.parseBookFileMetadata(filePath, fileName);
+    const seededFileMetadata = fillBookMetadataFromFileName({ ...fileMetadata }, fileName);
+    const title = seededFileMetadata.title ?? basename(fileName, extname(fileName));
+    const author = seededFileMetadata.author ?? 'Unknown Author';
 
     await job.updateProgress(60);
 
-    // Derive title/author from filename if not in EPUB metadata
-    if (!title) {
-      const nameWithoutExt = fileName.replace(/\.epub$/i, '');
-      const parts = nameWithoutExt.split(' - ');
-      if (parts.length >= 2) {
-        author = author || parts[0].trim();
-        title = parts.slice(1).join(' - ').trim();
-      } else {
-        title = nameWithoutExt.trim();
-      }
-    }
-    if (!author) author = 'Unknown Author';
-
     // Extract and save cover image
     let coverImageFileName: string | undefined;
-    if (epubMeta.coverImageBuffer) {
+    if (fileMetadata.coverImageBuffer) {
       coverImageFileName = `${randomUUID()}.jpg`;
       const coverPath = join(uploadsDirectory, 'cover-images', coverImageFileName);
-      await writeFile(coverPath, epubMeta.coverImageBuffer);
+      await writeFile(coverPath, fileMetadata.coverImageBuffer);
     }
 
     const stat = statSync(filePath);
+    const formatMetadata = {
+      ...buildBookFormatMetadata(fileMetadata, fileName, coverImageFileName),
+      title,
+      author,
+    };
+    const newFormat = new BookFormat({
+      id: randomUUID(),
+      format: detectedFormat,
+      fileName,
+      fileMtime: stat.mtimeMs,
+      fileContentHash: contentHash,
+      ...formatMetadata,
+    });
     const id = randomUUID();
     const syncSnapshot = SyncableMetadataHelper.fromBook({
       title,
       author,
-      language: epubMeta.language,
-      publisher: epubMeta.publisher,
-      publishedYear: epubMeta.publishedYear,
-      isbn: epubMeta.isbn,
-      summary: epubMeta.summary,
-      genres: epubMeta.genres,
-      series: epubMeta.series,
-      seriesPosition: epubMeta.seriesPosition,
+      language: formatMetadata.language,
+      publisher: formatMetadata.publisher,
+      publishedYear: formatMetadata.publishedYear,
+      isbn: formatMetadata.isbn,
+      summary: formatMetadata.summary,
+      genres: formatMetadata.genres,
+      series: formatMetadata.series,
+      seriesPosition: formatMetadata.seriesPosition,
     }) as unknown as Record<string, unknown>;
 
     const defaultOwnerId = await this.getDefaultScanUserId();
+
+    const matchingBook = await this.findMatchingBook(title, author, fileMetadata.isbn);
+    if (matchingBook.isSuccess()) {
+      const existingBook = matchingBook.value;
+      const formatExists = getAvailableBookFormatsFromBook(existingBook).some((format) => format.format === detectedFormat);
+      if (!formatExists) {
+        const updatedBook = this.withUpsertedFormat(existingBook, newFormat, {
+          coverImageFileName: existingBook.coverImageFileName ?? coverImageFileName,
+          summary: existingBook.summary ?? formatMetadata.summary,
+          genres: existingBook.genres?.length ? existingBook.genres : formatMetadata.genres,
+          publishedYear: existingBook.publishedYear ?? formatMetadata.publishedYear,
+          uploadedByUserId: existingBook.uploadedByUserId ?? defaultOwnerId,
+          series: existingBook.series ?? formatMetadata.series,
+          seriesPosition: existingBook.seriesPosition ?? formatMetadata.seriesPosition,
+          isbn: existingBook.isbn ?? formatMetadata.isbn,
+          pageCount: existingBook.pageCount ?? formatMetadata.pageCount,
+          publisher: existingBook.publisher ?? formatMetadata.publisher,
+          language: existingBook.language ?? formatMetadata.language,
+          syncedMetadata: syncSnapshot,
+          lastSyncedAt: new Date(),
+        });
+        await this.bookRepository.update(existingBook.id, updatedBook);
+        this.logger.log(`Attached ${detectedFormat} format to existing book "${existingBook.title}"`);
+        this.libraryEventsService.emit({ type: 'book-updated', bookId: existingBook.id });
+      }
+      await job.updateProgress(100);
+      return;
+    }
 
     const book = BookFactory.create(
       id,
@@ -161,17 +216,17 @@ export class FileProcessingProcessor extends WorkerHost {
       author,
       fileName,
       false, // isFavorite
-      epubMeta.genres || [],
-      epubMeta.publishedYear,
+      formatMetadata.genres || [],
+      formatMetadata.publishedYear,
       coverImageFileName,
-      epubMeta.summary,
+      formatMetadata.summary,
       defaultOwnerId, // uploadedByUserId — use default scan user if configured
-      epubMeta.series,
-      epubMeta.seriesPosition,
-      epubMeta.isbn,
-      undefined, // pageCount
-      epubMeta.publisher,
-      epubMeta.language,
+      formatMetadata.series,
+      formatMetadata.seriesPosition,
+      formatMetadata.isbn,
+      formatMetadata.pageCount,
+      formatMetadata.publisher,
+      formatMetadata.language,
       undefined, // averageRating
       undefined, // ratingsCount
       undefined, // metadataFetchedAt
@@ -182,6 +237,7 @@ export class FileProcessingProcessor extends WorkerHost {
       stat.mtimeMs,
       contentHash,
       undefined, // metadataUpdatedAt
+      [newFormat],
     );
 
     await job.updateProgress(80);
@@ -205,11 +261,11 @@ export class FileProcessingProcessor extends WorkerHost {
     await job.updateProgress(100);
   }
 
-  private async updateBookFileMetadata(bookId: string, filePath: string, contentHash: string) {
+  private async updateBookFileMetadata(bookId: string, fileName: string, filePath: string, contentHash: string) {
     const stat = statSync(filePath);
     const bookResult = await this.bookRepository.findById(bookId);
     if (bookResult.isSuccess()) {
-      const book = BookFactory.reconstitute(bookResult.value, {
+      const book = this.withUpdatedFormatState(bookResult.value, fileName, {
         fileMtime: stat.mtimeMs,
         fileContentHash: contentHash,
         lastSyncedAt: new Date(),
@@ -222,11 +278,11 @@ export class FileProcessingProcessor extends WorkerHost {
     const { bookId, filePath } = job.data;
     this.logger.log(`Syncing metadata for book ${bookId}`);
     await job.updateProgress(10);
-    await this.performMetadataSync(bookId, filePath);
+    await this.performMetadataSync(bookId, filePath, job.data.fileName);
     await job.updateProgress(100);
   }
 
-  private async performMetadataSync(bookId: string, filePath: string): Promise<void> {
+  private async performMetadataSync(bookId: string, filePath: string, fileName: string): Promise<void> {
     const bookResult = await this.bookRepository.findById(bookId);
     if (!bookResult.isSuccess()) {
       this.logger.warn(`Book ${bookId} not found for sync`);
@@ -234,24 +290,29 @@ export class FileProcessingProcessor extends WorkerHost {
     }
 
     const book = bookResult.value;
+    const detectedFormat = detectBookFormatFromFileName(fileName);
+    if (!detectedFormat) {
+      this.logger.warn(`Unsupported format for sync: ${fileName}`);
+      return;
+    }
 
     let fileMetadata: SyncableMetadata;
     try {
-      const epubMeta = await this.epubParser.parse(filePath);
+      const parsedMetadata = await this.parseBookFileMetadata(filePath, fileName);
       fileMetadata = SyncableMetadataHelper.fromBook({
-        title: epubMeta.title || book.title,
-        author: epubMeta.author || book.author,
-        language: epubMeta.language,
-        publisher: epubMeta.publisher,
-        publishedYear: epubMeta.publishedYear,
-        isbn: epubMeta.isbn,
-        summary: epubMeta.summary,
-        genres: epubMeta.genres,
-        series: epubMeta.series,
-        seriesPosition: epubMeta.seriesPosition,
+        title: parsedMetadata.title || book.title,
+        author: parsedMetadata.author || book.author,
+        language: parsedMetadata.language,
+        publisher: parsedMetadata.publisher,
+        publishedYear: parsedMetadata.publishedYear,
+        isbn: parsedMetadata.isbn,
+        summary: parsedMetadata.summary,
+        genres: parsedMetadata.genres,
+        series: parsedMetadata.series,
+        seriesPosition: parsedMetadata.seriesPosition,
       });
     } catch (err) {
-      this.logger.warn(`Cannot parse EPUB for sync: ${String(err)}`);
+      this.logger.warn(`Cannot parse file for sync: ${String(err)}`);
       return;
     }
 
@@ -263,9 +324,9 @@ export class FileProcessingProcessor extends WorkerHost {
     let finalMtime = stat.mtimeMs;
     let finalHash = await this.contentHashService.computeHash(filePath);
 
-    if (mergeResult.fileUpdated) {
+    if (mergeResult.fileUpdated && this.bookFormatProcessingService.canWriteMetadata(detectedFormat)) {
       try {
-        await this.epubMetadataWriter.writeMetadata(filePath, mergeResult.merged);
+        await this.bookFormatProcessingService.writeMetadata(filePath, detectedFormat, mergeResult.merged);
 
         // Recompute hash and stat after writing since the file changed
         const postWriteStat = statSync(filePath);
@@ -284,16 +345,20 @@ export class FileProcessingProcessor extends WorkerHost {
         ...mergeResult.merged,
         lastSyncedAt: new Date(),
         syncedMetadata: mergeResult.merged as unknown as Record<string, unknown>,
-        fileMtime: finalMtime,
-        fileContentHash: finalHash,
       });
-      await this.bookRepository.update(bookId, updatedBook);
+      await this.bookRepository.update(
+        bookId,
+        this.withUpdatedFormatState(updatedBook, fileName, {
+          fileMtime: finalMtime,
+          fileContentHash: finalHash,
+        }),
+      );
       if (mergeResult.dbUpdated) this.logger.log(`Updated DB metadata for "${book.title}"`);
       this.libraryEventsService.emit({ type: 'book-updated', bookId });
     } else {
       // No metadata changes — still update file-tracking fields so the periodic
       // scan does not re-trigger sync indefinitely.
-      const updatedBook = BookFactory.reconstitute(book, {
+      const updatedBook = this.withUpdatedFormatState(book, fileName, {
         lastSyncedAt: new Date(),
         fileMtime: finalMtime,
         fileContentHash: finalHash,
@@ -306,11 +371,29 @@ export class FileProcessingProcessor extends WorkerHost {
     const { bookId, fileName } = job.data;
     this.logger.log(`Soft-deleting book ${bookId} (file "${fileName}" removed)`);
 
-    const result = await this.bookRepository.softDelete(bookId);
-    if (result.isSuccess()) {
-      this.logger.log(`Soft-deleted book "${result.value.title}"`);
-      this.libraryEventsService.emit({ type: 'book-removed', bookId });
+    const bookResult = await this.bookRepository.findById(bookId);
+    if (!bookResult.isSuccess()) return;
+
+    const remainingFormats = getAvailableBookFormatsFromBook(bookResult.value).filter((format) => format.fileName !== fileName);
+    if (remainingFormats.length === 0) {
+      const result = await this.bookRepository.softDelete(bookId);
+      if (result.isSuccess()) {
+        this.logger.log(`Soft-deleted book "${result.value.title}"`);
+        this.libraryEventsService.emit({ type: 'book-removed', bookId });
+      }
+      await job.updateProgress(100);
+      return;
     }
+
+    const preferredFormat = getPreferredBookFormat(remainingFormats);
+    const updatedBook = BookFactory.reconstitute(bookResult.value, {
+      fileName: preferredFormat?.fileName ?? bookResult.value.fileName,
+      fileMtime: preferredFormat?.fileMtime ?? bookResult.value.fileMtime,
+      fileContentHash: preferredFormat?.fileContentHash ?? bookResult.value.fileContentHash,
+      formats: remainingFormats,
+    });
+    await this.bookRepository.update(bookId, updatedBook);
+    this.libraryEventsService.emit({ type: 'book-updated', bookId });
     await job.updateProgress(100);
   }
 
@@ -337,7 +420,18 @@ export class FileProcessingProcessor extends WorkerHost {
 
       const bookResult = await this.bookRepository.findById(bookId);
       if (bookResult.isSuccess()) {
-        const updatedBook = BookFactory.reconstitute(bookResult.value, { fileName: newFileName });
+        const matchingFormat = getBookFormatByFileName(bookResult.value, currentFileName);
+        const updatedFormats = getAvailableBookFormatsFromBook(bookResult.value).map((format) =>
+          format.fileName === currentFileName ? cloneBookFormat(format, { fileName: newFileName }) : format,
+        );
+        const preferredFormat = getPreferredBookFormat(updatedFormats);
+        const updatedBook = BookFactory.reconstitute(bookResult.value, {
+          fileName:
+            bookResult.value.fileName === currentFileName
+              ? newFileName
+              : preferredFormat?.fileName ?? bookResult.value.fileName,
+          formats: matchingFormat ? updatedFormats : bookResult.value.formats,
+        });
         await this.bookRepository.update(bookId, updatedBook);
         this.logger.log(`Renamed: ${currentFileName} → ${newFileName}`);
       } else {
@@ -358,5 +452,86 @@ export class FileProcessingProcessor extends WorkerHost {
       return result.value.value.trim();
     }
     return undefined;
+  }
+
+  private async parseBookFileMetadata(filePath: string, fileName: string): Promise<BookFileMetadata> {
+    const detectedFormat = detectBookFormatFromFileName(fileName);
+    if (!detectedFormat) return {};
+    return this.bookFormatProcessingService.parseMetadata(filePath, detectedFormat);
+  }
+
+  private async findMatchingBook(title: string, author: string, isbn?: string): Promise<Result<Book>> {
+    if (isbn) {
+      const byIsbn = await this.bookRepository.searchWithFilters({ isbn }, 10, 0);
+      if (byIsbn.isSuccess()) {
+        const match = byIsbn.value.data.find((book) => logicalBookMatches(book, { title, author, isbn }));
+        if (match) return this.bookRepository.findById(match.id);
+      }
+    }
+
+    const byAuthorAndTitle = await this.bookRepository.searchByAuthorAndTitle(author, title, 10, 0);
+    if (byAuthorAndTitle.isSuccess()) {
+      const match = byAuthorAndTitle.value.data.find((book) => logicalBookMatches(book, { title, author, isbn }));
+      if (match) return this.bookRepository.findById(match.id);
+    }
+
+    const byTitle = await this.bookRepository.searchWithFilters({ query: title }, 20, 0);
+    if (byTitle.isSuccess()) {
+      const match = byTitle.value.data.find((book) => logicalBookMatches(book, { title, author, isbn }));
+      if (match) return this.bookRepository.findById(match.id);
+    }
+
+    return Result.fail(new BookNotFoundFailure());
+  }
+
+  private withUpsertedFormat(book: Book, nextFormat: BookFormat, overrides: Partial<Book> = {}): Book {
+    const existingFormats = getAvailableBookFormatsFromBook(book)
+      .filter((format) => format.fileName !== nextFormat.fileName)
+      .map((format) => withBookMetadataFallback(format, book));
+    const formats = [...existingFormats, nextFormat];
+    const preferredFormat = getPreferredBookFormat(formats);
+    return BookFactory.reconstitute(book, {
+      ...overrides,
+      fileName: preferredFormat?.fileName ?? overrides.fileName ?? book.fileName,
+      fileMtime: preferredFormat?.fileMtime ?? overrides.fileMtime ?? book.fileMtime,
+      fileContentHash: preferredFormat?.fileContentHash ?? overrides.fileContentHash ?? book.fileContentHash,
+      formats,
+    });
+  }
+
+  private withUpdatedFormatState(book: Book, fileName: string, overrides: Partial<Book>): Book {
+    const formats = getAvailableBookFormatsFromBook(book).map((format) =>
+      format.fileName === fileName
+        ? cloneBookFormat(format, this.toFormatOverrides(overrides))
+        : format,
+    );
+    const { fileMtime, fileContentHash, ...restOverrides } = overrides;
+    const baseBook = BookFactory.reconstitute(book, { ...restOverrides, formats });
+    if (book.fileName === fileName) {
+      return BookFactory.reconstitute(baseBook, {
+        fileMtime: fileMtime ?? book.fileMtime,
+        fileContentHash: fileContentHash ?? book.fileContentHash,
+      });
+    }
+    return baseBook;
+  }
+
+  private toFormatOverrides(overrides: Partial<Book>): Partial<BookFormatProps> {
+    return {
+      fileMtime: overrides.fileMtime,
+      fileContentHash: overrides.fileContentHash,
+      title: overrides.title,
+      author: overrides.author,
+      genres: overrides.genres,
+      publishedYear: overrides.publishedYear,
+      coverImageFileName: overrides.coverImageFileName,
+      summary: overrides.summary,
+      series: overrides.series,
+      seriesPosition: overrides.seriesPosition,
+      isbn: overrides.isbn,
+      pageCount: overrides.pageCount,
+      publisher: overrides.publisher,
+      language: overrides.language,
+    };
   }
 }
