@@ -33,19 +33,20 @@ It provides a user-friendly interface to organize, search, and read your ebooks 
 
 ## Features
 
-- Book management with file upload (EPUB) — uploaded files are saved as `Author - Title.epub`; publication manifest (`GET /books/:id/manifest`) and content proxy (`GET /books/:id/content/:filename`) endpoints power the Readium-based web reader
+- Book management with file upload (EPUB and PDF) — uploaded files are saved as `Author - Title.ext`; publication manifest (`GET /books/:id/manifest`) and content proxy (`GET /books/:id/content/:filename`) endpoints power the EPUB web reader, while the same logical book can track multiple linked formats
 - Automatic metadata enrichment from Open Library (genres, publisher, language, ratings, summary, ISBN, page count)
 - Optional Google Books enrichment for series info and any fields Open Library didn't populate
+- Linked format management — merge matching uploads into one book, keep multiple formats attached to the same title, and split or remove individual formats when needed
 - Bookshelves (collections) with many-to-many book relationships
 - Favorites and Currently Reading lists
 - Cross-device reading position sync
 - User management with roles and permissions
 - Pagination and search across the library
 - OPDS catalog (v1.2 Atom and v2.0 JSON) for e-reader integration — authenticate with email and password via the companion Auth service
-- Automated library scanning — detects new, modified, and removed EPUB files in the uploads directory
-- Bidirectional metadata sync: three-way merge between the EPUB file, database, and last-synced snapshot (file wins on conflict); updated database metadata is written back to the EPUB file
+- Automated library scanning — detects new, modified, and removed EPUB and PDF files in the uploads directory
+- Bidirectional metadata sync for EPUB files: three-way merge between the EPUB file, database, and last-synced snapshot (file wins on conflict); updated database metadata is written back to the EPUB file
 - Soft delete when a file is removed; automatically restored when the file is re-added (matched by filename or content hash)
-- Book deduplication — admins can scan the library for duplicate EPUB files and resolve each pair
+- Book deduplication — admins can scan the library for duplicate book files and resolve each pair
 - Background job queues powered by BullMQ and Redis for reliable async processing
 - Real-time Server-Sent Events (SSE) at `GET /library/events` — notifies connected clients of library changes so they can refetch without polling
 - Job history API (`GET /jobs`, `GET /jobs/:id`) with manual scan trigger (`POST /library/scan`) and per-book sync (`POST /library/books/:id/sync`)
