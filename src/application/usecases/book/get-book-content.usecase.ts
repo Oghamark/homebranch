@@ -9,7 +9,11 @@ import { UseCase } from 'src/core/usecase';
 import { BookContentEntryNotFoundFailure } from 'src/domain/failures/book.failures';
 import { BookFactory } from 'src/domain/entities/book.factory';
 import { BookFormatType } from 'src/domain/entities/book-format.entity';
-import { getDefaultBookFormatType, getRequestedBookFormatFromBook, supportsBookFormatContentEntries } from 'src/domain/services/book-format';
+import {
+  getDefaultBookFormatType,
+  getRequestedBookFormatFromBook,
+  supportsBookFormatContentEntries,
+} from 'src/domain/services/book-format';
 import { BookFormatNotAvailableFailure, BookFormatUnsupportedFailure } from 'src/domain/failures/book.failures';
 
 export interface GetBookContentRequest {

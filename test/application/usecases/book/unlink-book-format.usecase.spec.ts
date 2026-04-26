@@ -95,7 +95,7 @@ describe('UnlinkBookFormatUseCase', () => {
     const linkedBook = buildLinkedBook();
 
     bookRepository.findById.mockResolvedValue(Result.ok(linkedBook));
-    bookRepository.splitFormat.mockImplementation(async (_bookId, updatedBook) => Result.ok(updatedBook));
+    bookRepository.splitFormat.mockImplementation((_bookId, updatedBook) => Promise.resolve(Result.ok(updatedBook)));
     bookFormatProcessingService.parseMetadata.mockResolvedValue({
       title: 'Original Title',
       author: 'Original Author',

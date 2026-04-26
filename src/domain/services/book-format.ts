@@ -81,9 +81,7 @@ export function supportsBookFormatMetadataWrite(format: BookFormatType): boolean
 }
 
 export function getDefaultBookFormatType(): BookFormatType {
-  return [...BOOK_FORMAT_DEFINITIONS]
-    .sort((left, right) => left.preferenceOrder - right.preferenceOrder)[0]
-    .format;
+  return [...BOOK_FORMAT_DEFINITIONS].sort((left, right) => left.preferenceOrder - right.preferenceOrder)[0].format;
 }
 
 export function getPreferredBookFormat(formats?: BookFormat[]): BookFormat | undefined {
@@ -131,7 +129,11 @@ export function getAvailableBookFormatsFromBook(book: {
   fileMtime?: number;
   fileContentHash?: string;
 }): BookFormat[] {
-  return book.formats?.length ? book.formats : getRequestedBookFormatFromBook(book) ? [getRequestedBookFormatFromBook(book)!] : [];
+  return book.formats?.length
+    ? book.formats
+    : getRequestedBookFormatFromBook(book)
+      ? [getRequestedBookFormatFromBook(book)!]
+      : [];
 }
 
 export function getBookFormatByFileName(

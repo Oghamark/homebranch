@@ -42,8 +42,7 @@ export class UnlinkBookFormatUseCase implements UseCase<UnlinkBookFormatRequest,
 
     const book = bookResult.value;
 
-    const canUnlink =
-      request.requestingUserRole === 'ADMIN' || book.uploadedByUserId === request.requestingUserId;
+    const canUnlink = request.requestingUserRole === 'ADMIN' || book.uploadedByUserId === request.requestingUserId;
     if (!canUnlink) {
       return Result.fail(new UnlinkFormatForbiddenFailure());
     }
@@ -81,7 +80,10 @@ export class UnlinkBookFormatUseCase implements UseCase<UnlinkBookFormatRequest,
       ...format,
       ...buildBookFormatMetadata(fileMetadata, format.fileName, coverImageFileName),
     });
-    const splitBookMetadata = fillBookMetadataFromFileName({ ...toBookOverridesFromFormat(splitFormat) }, format.fileName);
+    const splitBookMetadata = fillBookMetadataFromFileName(
+      { ...toBookOverridesFromFormat(splitFormat) },
+      format.fileName,
+    );
 
     return BookFactory.create(
       randomUUID(),

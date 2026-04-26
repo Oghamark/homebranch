@@ -268,7 +268,11 @@ export class BookController {
 
   @Delete(':id/formats/:formatId')
   @UseGuards(JwtAuthGuard)
-  unlinkBookFormat(@Param('id') id: string, @Param('formatId') formatId: string, @CurrentUser() currentUser: Express.User) {
+  unlinkBookFormat(
+    @Param('id') id: string,
+    @Param('formatId') formatId: string,
+    @CurrentUser() currentUser: Express.User,
+  ) {
     return this.unlinkBookFormatUseCase.execute({
       bookId: id,
       formatId,

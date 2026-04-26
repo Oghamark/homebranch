@@ -4,6 +4,7 @@ import { IBookDuplicateRepository } from 'src/application/interfaces/book-duplic
 import { IContentHashService } from 'src/application/interfaces/content-hash-service';
 import { IFileService } from 'src/application/interfaces/file-service';
 import { CreateBookUseCase } from 'src/application/usecases/book/create-book.usecase';
+import { CreateBookRequest } from 'src/application/contracts/book/create-book-request';
 import { IMetadataGateway } from 'src/application/interfaces/metadata-gateway';
 import { IEpubParser } from 'src/application/interfaces/epub-parser';
 import { IPdfParser } from 'src/application/interfaces/pdf-parser';
@@ -412,10 +413,12 @@ describe('CreateBookUseCase', () => {
       bookRepository.create.mockResolvedValueOnce(Result.ok(mockBook));
       pdfParser.parse.mockResolvedValueOnce({ title: 'PDF Title', author: 'PDF Author', pageCount: 321 });
 
-      const result = await useCase.execute({
+      const request = Object.assign(new CreateBookRequest(), {
         fileName: 'uploaded-book.pdf',
         uploadedByUserId: 'user-123',
-      } as any);
+      });
+
+      const result = await useCase.execute(request);
 
       expect(result.isSuccess()).toBe(true);
       expect(pdfParser.parse).toHaveBeenCalledTimes(1);
@@ -444,11 +447,13 @@ describe('CreateBookUseCase', () => {
       bookRepository.create.mockResolvedValueOnce(Result.ok(mockBook));
       pdfParser.parse.mockResolvedValueOnce({});
 
-      const result = await useCase.execute({
+      const request = Object.assign(new CreateBookRequest(), {
         fileName: '9f4f2a79-7a9f-49bc-8fe4-6de3b341e123.pdf',
         originalFileName: 'Converted Author - Converted Title.pdf',
         uploadedByUserId: 'user-123',
-      } as any);
+      });
+
+      const result = await useCase.execute(request);
 
       expect(result.isSuccess()).toBe(true);
       expect(bookRepository.create).toHaveBeenCalledWith(
@@ -501,7 +506,7 @@ describe('CreateBookUseCase', () => {
         Result.ok({ data: [existingBook], limit: 10, offset: 0, total: 1, nextCursor: null }),
       );
       bookRepository.findById.mockResolvedValueOnce(Result.ok(existingBook));
-      bookRepository.update.mockImplementationOnce(async (_id, book) => Result.ok(book));
+      bookRepository.update.mockImplementationOnce((_id, book) => Promise.resolve(Result.ok(book)));
 
       const result = await useCase.execute({
         title: 'Shared Title',

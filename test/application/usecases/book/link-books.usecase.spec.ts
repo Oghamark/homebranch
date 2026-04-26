@@ -35,7 +35,14 @@ describe('LinkBooksUseCase', () => {
     jest.clearAllMocks();
   });
 
-  function buildBook(id: string, title: string, author: string, format: BookFormatType, fileName: string, owner = 'user-123') {
+  function buildBook(
+    id: string,
+    title: string,
+    author: string,
+    format: BookFormatType,
+    fileName: string,
+    owner = 'user-123',
+  ) {
     return BookFactory.create(
       id,
       title,
@@ -75,11 +82,23 @@ describe('LinkBooksUseCase', () => {
   }
 
   test('links a source PDF book into a target EPUB book', async () => {
-    const target = buildBook('target', 'Shared Title', 'Shared Author', BookFormatType.EPUB, 'Shared Author - Shared Title.epub');
-    const source = buildBook('source', 'Shared Title', 'Shared Author', BookFormatType.PDF, 'Shared Author - Shared Title.pdf');
+    const target = buildBook(
+      'target',
+      'Shared Title',
+      'Shared Author',
+      BookFormatType.EPUB,
+      'Shared Author - Shared Title.epub',
+    );
+    const source = buildBook(
+      'source',
+      'Shared Title',
+      'Shared Author',
+      BookFormatType.PDF,
+      'Shared Author - Shared Title.pdf',
+    );
 
     bookRepository.findById.mockResolvedValueOnce(Result.ok(target)).mockResolvedValueOnce(Result.ok(source));
-    bookRepository.update.mockImplementation(async (_id, book) => Result.ok(book));
+    bookRepository.update.mockImplementation((_id, book) => Promise.resolve(Result.ok(book)));
     bookRepository.permanentDelete.mockResolvedValue(Result.ok(source));
 
     const result = await useCase.execute({

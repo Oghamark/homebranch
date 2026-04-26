@@ -41,13 +41,18 @@ export class LinkBooksUseCase implements UseCase<LinkBooksRequest, Book> {
 
     const canLink =
       request.requestingUserRole === 'ADMIN' ||
-      (targetBook.uploadedByUserId === request.requestingUserId && sourceBook.uploadedByUserId === request.requestingUserId);
+      (targetBook.uploadedByUserId === request.requestingUserId &&
+        sourceBook.uploadedByUserId === request.requestingUserId);
     if (!canLink) {
       return Result.fail(new LinkBooksForbiddenFailure());
     }
 
-    const targetFormats = getAvailableBookFormatsFromBook(targetBook).map((format) => withBookMetadataFallback(format, targetBook));
-    const sourceFormats = getAvailableBookFormatsFromBook(sourceBook).map((format) => withBookMetadataFallback(format, sourceBook));
+    const targetFormats = getAvailableBookFormatsFromBook(targetBook).map((format) =>
+      withBookMetadataFallback(format, targetBook),
+    );
+    const sourceFormats = getAvailableBookFormatsFromBook(sourceBook).map((format) =>
+      withBookMetadataFallback(format, sourceBook),
+    );
     const conflictingFormat = sourceFormats.find((sourceFormat) =>
       targetFormats.some((targetFormat) => targetFormat.format === sourceFormat.format),
     );

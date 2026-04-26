@@ -1,14 +1,6 @@
 import { BookFormatType } from 'src/domain/entities/book-format.entity';
 import { BookEntity } from 'src/infrastructure/database/book.entity';
-import {
-  Column,
-  CreateDateColumn,
-  Entity,
-  JoinColumn,
-  ManyToOne,
-  PrimaryGeneratedColumn,
-  Unique,
-} from 'typeorm';
+import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, Unique } from 'typeorm';
 
 @Entity()
 @Unique('UQ_book_format_entity_book_id_format', ['bookId', 'format'])

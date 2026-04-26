@@ -185,7 +185,9 @@ export class FileProcessingProcessor extends WorkerHost {
     const matchingBook = await this.findMatchingBook(title, author, fileMetadata.isbn);
     if (matchingBook.isSuccess()) {
       const existingBook = matchingBook.value;
-      const formatExists = getAvailableBookFormatsFromBook(existingBook).some((format) => format.format === detectedFormat);
+      const formatExists = getAvailableBookFormatsFromBook(existingBook).some(
+        (format) => format.format === detectedFormat,
+      );
       if (!formatExists) {
         const updatedBook = this.withUpsertedFormat(existingBook, newFormat, {
           coverImageFileName: existingBook.coverImageFileName ?? coverImageFileName,
@@ -374,7 +376,9 @@ export class FileProcessingProcessor extends WorkerHost {
     const bookResult = await this.bookRepository.findById(bookId);
     if (!bookResult.isSuccess()) return;
 
-    const remainingFormats = getAvailableBookFormatsFromBook(bookResult.value).filter((format) => format.fileName !== fileName);
+    const remainingFormats = getAvailableBookFormatsFromBook(bookResult.value).filter(
+      (format) => format.fileName !== fileName,
+    );
     if (remainingFormats.length === 0) {
       const result = await this.bookRepository.softDelete(bookId);
       if (result.isSuccess()) {
@@ -429,7 +433,7 @@ export class FileProcessingProcessor extends WorkerHost {
           fileName:
             bookResult.value.fileName === currentFileName
               ? newFileName
-              : preferredFormat?.fileName ?? bookResult.value.fileName,
+              : (preferredFormat?.fileName ?? bookResult.value.fileName),
           formats: matchingFormat ? updatedFormats : bookResult.value.formats,
         });
         await this.bookRepository.update(bookId, updatedBook);
@@ -501,9 +505,7 @@ export class FileProcessingProcessor extends WorkerHost {
 
   private withUpdatedFormatState(book: Book, fileName: string, overrides: Partial<Book>): Book {
     const formats = getAvailableBookFormatsFromBook(book).map((format) =>
-      format.fileName === fileName
-        ? cloneBookFormat(format, this.toFormatOverrides(overrides))
-        : format,
+      format.fileName === fileName ? cloneBookFormat(format, this.toFormatOverrides(overrides)) : format,
     );
     const { fileMtime, fileContentHash, ...restOverrides } = overrides;
     const baseBook = BookFactory.reconstitute(book, { ...restOverrides, formats });

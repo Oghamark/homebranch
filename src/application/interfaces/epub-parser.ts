@@ -1,5 +1,5 @@
 import { BookFileMetadata, IBookMetadataParser } from 'src/application/interfaces/book-metadata-parser';
 
-export interface IEpubMetadata extends BookFileMetadata {}
+export type IEpubMetadata = BookFileMetadata;
 
-export interface IEpubParser extends IBookMetadataParser {}
+export type IEpubParser = IBookMetadataParser;

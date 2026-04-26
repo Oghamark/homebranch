@@ -18,7 +18,7 @@ import { join, basename } from 'path';
 import { fillBookMetadataFromFileName } from 'src/domain/services/book-file-metadata';
 import { buildBookFormatMetadata } from 'src/domain/services/book-format-metadata';
 import { FileNameGenerator } from 'src/domain/services/filename-generator';
-import { BookFormat, BookFormatType } from 'src/domain/entities/book-format.entity';
+import { BookFormat } from 'src/domain/entities/book-format.entity';
 import {
   detectBookFormatFromFileName,
   getBookFormatExtension,
@@ -72,7 +72,8 @@ export class CreateBookUseCase implements UseCase<CreateBookRequest, CreateBookR
       if (fileMetadata.summary) parsedSummary = fileMetadata.summary;
       if (!enrichedDto.genres?.length && fileMetadata.genres?.length) enrichedDto.genres = fileMetadata.genres;
       if (!enrichedDto.series && fileMetadata.series) enrichedDto.series = fileMetadata.series;
-      if (!enrichedDto.seriesPosition && fileMetadata.seriesPosition) enrichedDto.seriesPosition = fileMetadata.seriesPosition;
+      if (!enrichedDto.seriesPosition && fileMetadata.seriesPosition)
+        enrichedDto.seriesPosition = fileMetadata.seriesPosition;
       if (!enrichedDto.pageCount && fileMetadata.pageCount) enrichedDto.pageCount = fileMetadata.pageCount;
 
       // Extract and save cover image from epub if none was uploaded

@@ -7,7 +7,11 @@ import { IBookRepository } from 'src/application/interfaces/book-repository';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { LibraryEventsService } from 'src/infrastructure/services/library-events.service';
-import { getAvailableBookFormatsFromBook, getBookFormatByFileName, isSupportedBookFile } from 'src/domain/services/book-format';
+import {
+  getAvailableBookFormatsFromBook,
+  getBookFormatByFileName,
+  isSupportedBookFile,
+} from 'src/domain/services/book-format';
 
 @Processor('library-scan')
 export class LibraryScanProcessor extends WorkerHost {

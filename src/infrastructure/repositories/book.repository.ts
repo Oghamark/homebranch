@@ -65,10 +65,11 @@ export class TypeOrmBookRepository implements IBookRepository {
   }
 
   async findById(id: string, viewerUserId?: string): Promise<Result<Book>> {
-    const bookEntity = (await this.repository.findOne({
-      where: { id, deletedAt: IsNull() },
-      relations: { formats: true },
-    })) || null;
+    const bookEntity =
+      (await this.repository.findOne({
+        where: { id, deletedAt: IsNull() },
+        relations: { formats: true },
+      })) || null;
     if (!bookEntity) return Result.fail(new BookNotFoundFailure());
     const hydratedEntity = await this.hydrateFormatMetadata(bookEntity);
     const book = BookMapper.toDomain(hydratedEntity);
@@ -675,7 +676,10 @@ export class TypeOrmBookRepository implements IBookRepository {
 
     const uploadsDirectory = process.env.UPLOADS_DIRECTORY || './uploads';
     const coverImageFileName = `${randomUUID()}.jpg`;
-    await this.fileService.writeFile(join(uploadsDirectory, 'cover-images', coverImageFileName), fileMetadata.coverImageBuffer);
+    await this.fileService.writeFile(
+      join(uploadsDirectory, 'cover-images', coverImageFileName),
+      fileMetadata.coverImageBuffer,
+    );
     return coverImageFileName;
   }
 }
