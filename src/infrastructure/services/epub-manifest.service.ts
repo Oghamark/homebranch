@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as AdmZip from 'adm-zip';
-import { basename, join } from 'path';
+import { basename, join, posix } from 'path';
 import { Book } from 'src/domain/entities/book.entity';
 import { IPublicationManifestService } from 'src/application/interfaces/publication-manifest-service';
 
@@ -40,9 +40,13 @@ export class EpubManifestService implements IPublicationManifestService {
     const itemById = new Map(manifestItems.map((i) => [i.id, i]));
 
     const contentBase = `${baseUrl}/books/${book.id}/content`;
-    // Encode each path segment individually to preserve slashes
-    const makeUrl = (zipPath: string) => `${contentBase}/${zipPath.split('/').map(encodeURIComponent).join('/')}`;
-    const resolveHref = (relHref: string) => opfDir + relHref;
+    // Encode each path segment individually to preserve slashes while keeping URL fragments intact.
+    const makeUrl = (zipPath: string) => {
+      const [pathPart, fragment] = zipPath.split('#', 2);
+      const encodedPath = pathPart.split('/').map(encodeURIComponent).join('/');
+      return fragment ? `${contentBase}/${encodedPath}#${fragment}` : `${contentBase}/${encodedPath}`;
+    };
+    const resolveHref = (relHref: string) => this.resolveZipPath(opfDir, relHref);
 
     const readingOrder = spineItems
       .map((s) => itemById.get(s.idref))
@@ -213,7 +217,7 @@ export class EpubManifestService implements IPublicationManifestService {
       const rawHref = anchor[1];
       const title = anchor[2].replace(/<[^>]+>/g, '').trim();
       // Resolve href relative to nav file's directory
-      const resolvedHref = rawHref.startsWith('http') ? rawHref : makeUrl(baseDir + rawHref);
+      const resolvedHref = rawHref.startsWith('http') ? rawHref : makeUrl(this.resolveZipPath(baseDir, rawHref));
       const children = liContent.includes('<ol') ? this.parseOlItems(liContent, makeUrl, baseDir) : undefined;
       items.push({ href: resolvedHref, title, ...(children?.length && { children }) });
     }
@@ -256,12 +260,18 @@ export class EpubManifestService implements IPublicationManifestService {
       const title = /<text[^>]*>([\s\S]*?)<\/text>/i.exec(content)?.[1]?.trim() ?? '';
       const src = /<content[^>]+src="([^"]+)"/.exec(content)?.[1];
       if (!src) continue;
-      const href = makeUrl(baseDir + src);
+      const href = makeUrl(this.resolveZipPath(baseDir, src));
       // Avoid double-recursing the full string by removing the outer navPoint match
       const innerXml = content.replace(/<navPoint\b[\s\S]*?<\/navPoint>/g, '');
       const children = this.parseNavPoints(innerXml, makeUrl, baseDir);
       items.push({ href, title, ...(children.length && { children }) });
     }
     return items;
+  }
+
+  private resolveZipPath(baseDir: string, relativePath: string): string {
+    const [pathPart, fragment] = relativePath.split('#', 2);
+    const normalizedPath = posix.normalize(posix.join(baseDir, pathPart)).replace(/^\/+/, '');
+    return fragment ? `${normalizedPath}#${fragment}` : normalizedPath;
   }
 }
