@@ -59,7 +59,7 @@ export class BackfillLegacyBookFormats1777228301570 implements MigrationInterfac
     `);
   }
 
-  public async down(_queryRunner: QueryRunner): Promise<void> {
+  public async down(): Promise<void> {
     // Irreversible data backfill: legacy rows cannot be distinguished safely from later valid rows.
   }
 }
