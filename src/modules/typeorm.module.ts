@@ -28,6 +28,7 @@ import { BookDuplicateEntity } from 'src/infrastructure/database/book-duplicate.
 import { AddBookDuplicateTable1773801937488 } from 'src/migrations/1773801937488-AddBookDuplicateTable';
 import { AddBookFormatTable1774652732886 } from 'src/migrations/1774652732886-AddBookFormatTable';
 import { AddMetadataToBookFormat1777224804830 } from 'src/migrations/1777224804830-AddMetadataToBookFormat';
+import { BackfillLegacyBookFormats1777228301570 } from 'src/migrations/1777228301570-BackfillLegacyBookFormats';
 
 @Module({
   imports: [
@@ -86,6 +87,7 @@ import { AddMetadataToBookFormat1777224804830 } from 'src/migrations/17772248048
             AddBookDuplicateTable1773801937488,
             AddBookFormatTable1774652732886,
             AddMetadataToBookFormat1777224804830,
+            BackfillLegacyBookFormats1777228301570,
           ],
           migrationsRun: true,
           migrationsTableName: 'migration_table',

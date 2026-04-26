@@ -5,6 +5,7 @@ import { mock } from 'jest-mock-extended';
 import { mockBook } from 'test/mocks/bookMocks';
 import { Result } from 'src/core/result';
 import { BookNotFoundFailure } from 'src/domain/failures/book.failures';
+import { BookFactory } from 'src/domain/entities/book.factory';
 import Mocked = jest.Mocked;
 
 describe('DownloadBookUseCase', () => {
@@ -44,6 +45,20 @@ describe('DownloadBookUseCase', () => {
       book: mockBook,
       format: 'EPUB',
       fileName: mockBook.fileName,
+    });
+  });
+
+  test('Falls back to the legacy root file when format rows have not been backfilled yet', async () => {
+    const legacyBook = BookFactory.create('legacy-book', 'Legacy Book', 'Legacy Author', 'legacy-book.epub');
+    bookRepository.findById.mockResolvedValueOnce(Result.ok(legacyBook));
+
+    const result = await useCase.execute({ id: legacyBook.id });
+
+    expect(result.isSuccess()).toBe(true);
+    expect(result.value).toEqual({
+      book: legacyBook,
+      format: 'EPUB',
+      fileName: 'legacy-book.epub',
     });
   });
 
