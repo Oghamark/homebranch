@@ -14,6 +14,7 @@ import { ListDuplicatesUseCase } from 'src/application/usecases/book/list-duplic
 import { ResolveDuplicateUseCase } from 'src/application/usecases/book/resolve-duplicate.usecase';
 import { ScanDuplicatesUseCase } from 'src/application/usecases/book/scan-duplicates.usecase';
 import { BookEntity } from 'src/infrastructure/database/book.entity';
+import { BookFormatEntity } from 'src/infrastructure/database/book-format.entity';
 import { BookDuplicateEntity } from 'src/infrastructure/database/book-duplicate.entity';
 import { UserBookFavoriteEntity } from 'src/infrastructure/database/user-book-favorite.entity';
 import { BookMapper } from 'src/infrastructure/mappers/book.mapper';
@@ -22,6 +23,9 @@ import { TypeOrmBookDuplicateRepository } from 'src/infrastructure/repositories/
 import { DuplicateScanProcessor } from 'src/infrastructure/processors/duplicate-scan.processor';
 import { DuplicateScanSchedulerService } from 'src/infrastructure/schedulers/duplicate-scan-scheduler.service';
 import { ContentHashService } from 'src/infrastructure/services/content-hash.service';
+import { FileService } from 'src/infrastructure/services/file.service';
+import { DuplicateScanQueueService } from 'src/infrastructure/services/duplicate-scan-queue.service';
+import { FileProcessingQueueService } from 'src/infrastructure/services/file-processing-queue.service';
 import { BookController } from 'src/presentation/controllers/book.controller';
 import { BookDuplicateController } from 'src/presentation/controllers/book-duplicate.controller';
 import { AuthModule } from 'src/modules/auth.module';
@@ -31,13 +35,21 @@ import { CompositeMetadataGateway } from 'src/infrastructure/gateways/composite-
 import { CompositeSummaryGateway } from 'src/infrastructure/gateways/composite-summary.gateway';
 import { FetchBookMetadataUseCase } from 'src/application/usecases/book/fetch-book-metadata-use-case.service';
 import { FetchBookSummaryUseCase } from 'src/application/usecases/book/fetch-book-summary.usecase';
+import { LinkBooksUseCase } from 'src/application/usecases/book/link-books.usecase';
+import { UnlinkBookFormatUseCase } from 'src/application/usecases/book/unlink-book-format.usecase';
 import { MetadataSchedulerService } from 'src/infrastructure/schedulers/metadata-scheduler.service';
+import { GetBookManifestUseCase } from 'src/application/usecases/book/get-book-manifest.usecase';
+import { GetBookContentUseCase } from 'src/application/usecases/book/get-book-content.usecase';
+import { EpubManifestService } from 'src/infrastructure/services/epub-manifest.service';
+import { EpubContentService } from 'src/infrastructure/services/epub-content.service';
 import { EpubParserService } from 'src/infrastructure/parsers/epub-parser.service';
+import { PdfParserService } from 'src/infrastructure/parsers/pdf-parser.service';
 import { SettingsModule } from 'src/modules/settings.module';
+import { BookFormatProcessingService } from 'src/infrastructure/services/book-format-processing.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([BookEntity, BookDuplicateEntity, UserBookFavoriteEntity]),
+    TypeOrmModule.forFeature([BookEntity, BookFormatEntity, BookDuplicateEntity, UserBookFavoriteEntity]),
     BullModule.registerQueue({ name: 'file-processing' }, { name: 'duplicate-scan' }),
     AuthModule,
     SettingsModule,
@@ -53,6 +65,16 @@ import { SettingsModule } from 'src/modules/settings.module';
       useClass: TypeOrmBookDuplicateRepository,
     },
 
+    // Queue adapters
+    {
+      provide: 'DuplicateScanQueue',
+      useClass: DuplicateScanQueueService,
+    },
+    {
+      provide: 'FileProcessingQueue',
+      useClass: FileProcessingQueueService,
+    },
+
     // Use Cases
     CreateBookUseCase,
     DeleteBookUseCase,
@@ -65,9 +87,13 @@ import { SettingsModule } from 'src/modules/settings.module';
     ToggleBookFavoriteUseCase,
     FetchBookMetadataUseCase,
     FetchBookSummaryUseCase,
+    LinkBooksUseCase,
+    UnlinkBookFormatUseCase,
     ListDuplicatesUseCase,
     ResolveDuplicateUseCase,
     ScanDuplicatesUseCase,
+    GetBookManifestUseCase,
+    GetBookContentUseCase,
 
     // Mappers
     BookMapper,
@@ -95,11 +121,30 @@ import { SettingsModule } from 'src/modules/settings.module';
       provide: 'EpubParser',
       useClass: EpubParserService,
     },
+    {
+      provide: 'PdfParser',
+      useClass: PdfParserService,
+    },
+
+    // Publication services
+    BookFormatProcessingService,
+    {
+      provide: 'PublicationManifestService',
+      useClass: EpubManifestService,
+    },
+    {
+      provide: 'PublicationContentService',
+      useClass: EpubContentService,
+    },
 
     // Services
     {
       provide: 'ContentHashService',
       useClass: ContentHashService,
+    },
+    {
+      provide: 'FileService',
+      useClass: FileService,
     },
 
     // Schedulers

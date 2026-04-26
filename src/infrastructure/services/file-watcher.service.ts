@@ -2,8 +2,9 @@ import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/commo
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import * as chokidar from 'chokidar';
-import { join } from 'path';
+import { basename, join } from 'path';
 import { Interval } from '@nestjs/schedule';
+import { isSupportedBookFile } from 'src/domain/services/book-format';
 
 const POLL_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -71,8 +72,8 @@ export class FileWatcherService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async onFileAdded(filePath: string) {
-    if (!filePath.endsWith('.epub')) {
-      this.logger.debug(`Ignoring non-EPUB file: ${filePath}`);
+    if (!isSupportedBookFile(filePath)) {
+      this.logger.debug(`Ignoring unsupported book file: ${filePath}`);
       return;
     }
     this.logger.log(`New file detected: ${filePath}`);
@@ -80,16 +81,16 @@ export class FileWatcherService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async onFileChanged(filePath: string) {
-    if (!filePath.endsWith('.epub')) return;
+    if (!isSupportedBookFile(filePath)) return;
     this.logger.log(`File changed: ${filePath}`);
     await this.enqueueFileProcessing(filePath, 'change');
   }
 
   private async onFileRemoved(filePath: string) {
-    if (!filePath.endsWith('.epub')) return;
+    if (!isSupportedBookFile(filePath)) return;
     this.logger.log(`File removed: ${filePath}`);
 
-    const fileName = filePath.split('/').pop()!;
+    const fileName = basename(filePath);
     await this.libraryScanQueue.add(
       'file-removed',
       { fileName, filePath },
@@ -98,7 +99,7 @@ export class FileWatcherService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async enqueueFileProcessing(filePath: string, event: string) {
-    const fileName = filePath.split('/').pop()!;
+    const fileName = basename(filePath);
     await this.libraryScanQueue.add(
       'process-file',
       { fileName, filePath, event },

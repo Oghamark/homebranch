@@ -7,6 +7,11 @@ import { IBookRepository } from 'src/application/interfaces/book-repository';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { LibraryEventsService } from 'src/infrastructure/services/library-events.service';
+import {
+  getAvailableBookFormatsFromBook,
+  getBookFormatByFileName,
+  isSupportedBookFile,
+} from 'src/domain/services/book-format';
 
 @Processor('library-scan')
 export class LibraryScanProcessor extends WorkerHost {
@@ -42,7 +47,7 @@ export class LibraryScanProcessor extends WorkerHost {
 
     let files: string[];
     try {
-      files = readdirSync(booksDirectory).filter((f) => f.endsWith('.epub') && !f.startsWith('.'));
+      files = readdirSync(booksDirectory).filter((f) => isSupportedBookFile(f) && !f.startsWith('.'));
     } catch (error) {
       this.logger.error(`Cannot read books directory: ${String(error)}`);
       return;
@@ -55,11 +60,14 @@ export class LibraryScanProcessor extends WorkerHost {
     }
 
     const dbBooks = booksResult.value;
-    const dbFileNames = new Set(dbBooks.map((b) => b.fileName));
+    const trackedFiles = dbBooks.flatMap((book) =>
+      getAvailableBookFormatsFromBook(book).map((format) => ({ book, format })),
+    );
+    const dbFileNames = new Set(trackedFiles.map(({ format }) => format.fileName));
     const diskFileNames = new Set(files);
 
     let processed = 0;
-    const total = files.length + dbBooks.length;
+    const total = files.length + trackedFiles.length;
 
     // Detect new or changed files
     for (const fileName of files) {
@@ -76,12 +84,12 @@ export class LibraryScanProcessor extends WorkerHost {
         try {
           const stat = statSync(filePath);
           const mtime = stat.mtimeMs;
-          const book = dbBooks.find((b) => b.fileName === fileName);
-          if (book && book.fileMtime && Math.abs(mtime - book.fileMtime) > 1000) {
+          const trackedFile = trackedFiles.find(({ format }) => format.fileName === fileName);
+          if (trackedFile?.format.fileMtime && Math.abs(mtime - trackedFile.format.fileMtime) > 1000) {
             await this.fileProcessingQueue.add(
               'sync-metadata',
-              { bookId: book.id, fileName, filePath },
-              { jobId: `sync-${book.id}-${Date.now()}`, removeOnComplete: 100, removeOnFail: 50 },
+              { bookId: trackedFile.book.id, fileName, filePath },
+              { jobId: `sync-${trackedFile.book.id}-${Date.now()}`, removeOnComplete: 100, removeOnFail: 50 },
             );
           }
         } catch {
@@ -93,11 +101,11 @@ export class LibraryScanProcessor extends WorkerHost {
     }
 
     // Detect removed files
-    for (const book of dbBooks) {
-      if (!diskFileNames.has(book.fileName)) {
+    for (const { book, format } of trackedFiles) {
+      if (!diskFileNames.has(format.fileName)) {
         await this.fileProcessingQueue.add(
           'soft-delete-book',
-          { bookId: book.id, fileName: book.fileName },
+          { bookId: book.id, fileName: format.fileName },
           { removeOnComplete: 100, removeOnFail: 50 },
         );
       }
@@ -132,6 +140,8 @@ export class LibraryScanProcessor extends WorkerHost {
     } else if (event === 'change') {
       const bookResult = await this.bookRepository.findByFileName(fileName);
       if (bookResult.isSuccess()) {
+        const trackedFormat = getBookFormatByFileName(bookResult.value, fileName);
+        if (!trackedFormat) return;
         // Use a timestamp suffix to avoid BullMQ's jobId deduplication: the Lua
         // addStandardJob script blocks re-adding any job whose key still exists in
         // Redis, including completed jobs kept by removeOnComplete. A unique ID

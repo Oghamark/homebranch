@@ -1,6 +1,6 @@
 export class FileNameGenerator {
-  static generate(author: string, title: string): string {
-    const sanitized = `${this.sanitize(author)} - ${this.sanitize(title)}.epub`;
+  static generate(author: string, title: string, extension: string = '.epub'): string {
+    const sanitized = `${this.sanitize(author)} - ${this.sanitize(title)}${extension}`;
     return this.truncate(sanitized, 200);
   }
 
@@ -12,8 +12,9 @@ export class FileNameGenerator {
   static disambiguate(baseName: string, existingNames: Set<string>): string {
     if (!existingNames.has(baseName)) return baseName;
 
-    const ext = '.epub';
-    const nameWithoutExt = baseName.replace(/\.epub$/i, '');
+    const extensionIndex = baseName.lastIndexOf('.');
+    const ext = extensionIndex >= 0 ? baseName.slice(extensionIndex) : '';
+    const nameWithoutExt = extensionIndex >= 0 ? baseName.slice(0, extensionIndex) : baseName;
     let counter = 2;
     let candidate = `${nameWithoutExt} (${counter})${ext}`;
     while (existingNames.has(candidate)) {
@@ -34,7 +35,8 @@ export class FileNameGenerator {
 
   private static truncate(fileName: string, maxLength: number): string {
     if (fileName.length <= maxLength) return fileName;
-    const ext = '.epub';
+    const extensionIndex = fileName.lastIndexOf('.');
+    const ext = extensionIndex >= 0 ? fileName.slice(extensionIndex) : '';
     return fileName.slice(0, maxLength - ext.length) + ext;
   }
 }

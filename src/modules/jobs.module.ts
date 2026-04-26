@@ -3,6 +3,9 @@ import { BullModule } from '@nestjs/bullmq';
 import { JobController } from 'src/presentation/controllers/jobs.controller';
 import { AuthModule } from 'src/modules/auth.module';
 import { JobEventsService } from 'src/infrastructure/services/job-events.service';
+import { JobQueryService } from 'src/infrastructure/services/job-query.service';
+import { ListJobsUseCase } from 'src/application/usecases/jobs/list-jobs.usecase';
+import { GetJobUseCase } from 'src/application/usecases/jobs/get-job.usecase';
 
 @Module({
   imports: [
@@ -10,6 +13,17 @@ import { JobEventsService } from 'src/infrastructure/services/job-events.service
     AuthModule,
   ],
   controllers: [JobController],
-  providers: [JobEventsService],
+  providers: [
+    {
+      provide: 'JobEventsService',
+      useClass: JobEventsService,
+    },
+    {
+      provide: 'JobQueryService',
+      useClass: JobQueryService,
+    },
+    ListJobsUseCase,
+    GetJobUseCase,
+  ],
 })
 export class JobsModule {}
