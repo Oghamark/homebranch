@@ -27,6 +27,7 @@ import { OPDS_MEDIA_TYPE } from 'src/presentation/opds/opds-link.helper';
 import { Request, Response } from 'express';
 import { createReadStream, existsSync } from 'fs';
 import { basename, join } from 'path';
+import { buildExternalBaseUrl } from 'src/presentation/utils/external-url';
 
 const DEFAULT_LIMIT = 20;
 
@@ -116,9 +117,7 @@ export class OpdsV1Controller {
   /** OPDS Authentication 1.0 document — public, no auth required */
   @Get('auth')
   getAuthDocument(@Req() request: Request, @Res() response: Response): void {
-    const proto = String(request.headers['x-forwarded-proto'] ?? request.protocol);
-    const host = String(request.headers['x-forwarded-host'] ?? request.headers.host ?? 'localhost');
-    const authDocUrl = `${proto}://${host}/opds/v1/auth`;
+    const authDocUrl = `${buildExternalBaseUrl(request)}/opds/v1/auth`;
     response
       .status(200)
       .setHeader('Content-Type', 'application/opds-authentication+json')
