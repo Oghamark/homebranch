@@ -92,6 +92,15 @@ describe('OPDS controllers (e2e)', () => {
     expect(mockBookService.getNewArrivals).toHaveBeenCalledWith(20, 0);
   });
 
+  test('includes the forwarded prefix in the v1 auth document ID', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/opds/v1/auth')
+      .set('x-forwarded-prefix', '/api')
+      .expect(200);
+
+    expect(JSON.parse(response.text).id).toContain('/api/opds/v1/auth');
+  });
+
   test('serves v2 search feed from BookService', async () => {
     mockBookService.getBooks.mockResolvedValueOnce({ data: [], total: 0, limit: 20, offset: 0, nextCursor: null });
 

@@ -103,7 +103,7 @@ export class OpdsV1Controller {
   /** OPDS Authentication 1.0 document — public, no auth required */
   @Get('auth')
   getAuthDocument(@Req() request: Request, @Res() response: Response): void {
-    const authDocUrl = `${buildExternalBaseUrl(request)}/opds/v1/auth`;
+    const authDocUrl = `${buildExternalBaseUrl(request, { includeForwardedPrefix: true })}/opds/v1/auth`;
     response
       .status(200)
       .setHeader('Content-Type', 'application/opds-authentication+json')

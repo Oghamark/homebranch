@@ -33,7 +33,7 @@ export class OpdsAuthExceptionFilter implements ExceptionFilter {
     const request = http.getRequest<Request>();
     const response = http.getResponse<Response>();
 
-    const baseUrl = buildExternalBaseUrl(request);
+    const baseUrl = buildExternalBaseUrl(request, { includeForwardedPrefix: true });
     const authDocUrl = `${baseUrl}/opds/v1/auth`;
 
     response
