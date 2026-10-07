@@ -20,11 +20,24 @@ interface OpdsV2Feed {
 
 @Injectable()
 export class OpdsV2Builder {
-  private baseLinks(selfHref: string): OpdsLink[] {
+  private externalUrl(baseUrl: string, path: string): string {
+    return baseUrl ? `${baseUrl}${path}` : path;
+  }
+
+  private baseLinks(selfHref: string, baseUrl: string): OpdsLink[] {
     return [
       { rel: OPDS_LINK_REL.SELF, href: selfHref, type: OPDS_MEDIA_TYPE.OPDS_JSON },
-      { rel: OPDS_LINK_REL.START, href: '/opds/v2/catalog', type: OPDS_MEDIA_TYPE.OPDS_JSON },
-      { rel: OPDS_LINK_REL.SEARCH, href: '/opds/v2/search{?q}', type: OPDS_MEDIA_TYPE.OPDS_JSON, title: 'Search' },
+      {
+        rel: OPDS_LINK_REL.START,
+        href: this.externalUrl(baseUrl, '/opds/v2/catalog'),
+        type: OPDS_MEDIA_TYPE.OPDS_JSON,
+      },
+      {
+        rel: OPDS_LINK_REL.SEARCH,
+        href: this.externalUrl(baseUrl, '/opds/v2/search{?q}'),
+        type: OPDS_MEDIA_TYPE.OPDS_JSON,
+        title: 'Search',
+      },
     ];
   }
 
@@ -50,7 +63,7 @@ export class OpdsV2Builder {
     return links;
   }
 
-  private bookPublication(book: Book): Record<string, unknown> {
+  private bookPublication(book: Book, baseUrl: string): Record<string, unknown> {
     const metadata: Record<string, unknown> = {
       '@type': 'http://schema.org/Book',
       title: book.title,
@@ -65,32 +78,44 @@ export class OpdsV2Builder {
     if (book.genres?.length) metadata.subject = book.genres.filter(Boolean);
 
     const links: OpdsLink[] = [
-      { rel: OPDS_LINK_REL.ACQUISITION, href: `/opds/v1/download/${book.id}`, type: OPDS_MEDIA_TYPE.EPUB },
+      {
+        rel: OPDS_LINK_REL.ACQUISITION,
+        href: this.externalUrl(baseUrl, `/opds/v1/download/${book.id}`),
+        type: OPDS_MEDIA_TYPE.EPUB,
+      },
     ];
 
     const images: Array<{ href: string; type: string }> = [];
     if (book.coverImageFileName) {
-      images.push({ href: `/uploads/cover-images/${book.coverImageFileName}`, type: OPDS_MEDIA_TYPE.JPEG });
+      images.push({
+        href: this.externalUrl(baseUrl, `/uploads/cover-images/${book.coverImageFileName}`),
+        type: OPDS_MEDIA_TYPE.JPEG,
+      });
     }
 
     return { metadata, links, images };
   }
 
-  buildCatalogFeed(): string {
+  buildCatalogFeed(baseUrl = ''): string {
     const feed: OpdsV2Feed = {
       metadata: { title: 'Homebranch Catalog' },
-      links: this.baseLinks('/opds/v2/catalog'),
+      links: this.baseLinks(this.externalUrl(baseUrl, '/opds/v2/catalog'), baseUrl),
       navigation: [
-        { title: 'All Books', href: '/opds/v2/books', type: OPDS_MEDIA_TYPE.OPDS_JSON, rel: OPDS_LINK_REL.SUBSECTION },
+        {
+          title: 'All Books',
+          href: this.externalUrl(baseUrl, '/opds/v2/books'),
+          type: OPDS_MEDIA_TYPE.OPDS_JSON,
+          rel: OPDS_LINK_REL.SUBSECTION,
+        },
         {
           title: 'New Arrivals',
-          href: '/opds/v2/books/new',
+          href: this.externalUrl(baseUrl, '/opds/v2/books/new'),
           type: OPDS_MEDIA_TYPE.OPDS_JSON,
           rel: OPDS_LINK_REL.SUBSECTION,
         },
         {
           title: 'Bookshelves',
-          href: '/opds/v2/bookshelves',
+          href: this.externalUrl(baseUrl, '/opds/v2/bookshelves'),
           type: OPDS_MEDIA_TYPE.OPDS_JSON,
           rel: OPDS_LINK_REL.SUBSECTION,
         },
@@ -99,43 +124,46 @@ export class OpdsV2Builder {
     return JSON.stringify(feed);
   }
 
-  buildAllBooksFeed(result: PaginationResult<Book[]>): string {
+  buildAllBooksFeed(result: PaginationResult<Book[]>, baseUrl = ''): string {
+    const path = this.externalUrl(baseUrl, '/opds/v2/books');
     const feed: OpdsV2Feed = {
       metadata: {
         title: 'All Books',
         numberOfItems: result.total,
         itemsPerPage: result.limit ?? 20,
       },
-      links: [...this.baseLinks('/opds/v2/books'), ...this.paginationLinks('/opds/v2/books', result)],
-      publications: result.data.map((b) => this.bookPublication(b)),
+      links: [...this.baseLinks(path, baseUrl), ...this.paginationLinks(path, result)],
+      publications: result.data.map((b) => this.bookPublication(b, baseUrl)),
     };
     return JSON.stringify(feed);
   }
 
-  buildNewArrivalsFeed(result: PaginationResult<Book[]>): string {
+  buildNewArrivalsFeed(result: PaginationResult<Book[]>, baseUrl = ''): string {
+    const path = this.externalUrl(baseUrl, '/opds/v2/books/new');
     const feed: OpdsV2Feed = {
       metadata: {
         title: 'New Arrivals',
         numberOfItems: result.total,
         itemsPerPage: result.limit ?? 20,
       },
-      links: [...this.baseLinks('/opds/v2/books/new'), ...this.paginationLinks('/opds/v2/books/new', result)],
-      publications: result.data.map((b) => this.bookPublication(b)),
+      links: [...this.baseLinks(path, baseUrl), ...this.paginationLinks(path, result)],
+      publications: result.data.map((b) => this.bookPublication(b, baseUrl)),
     };
     return JSON.stringify(feed);
   }
 
-  buildBookShelvesFeed(result: PaginationResult<BookShelfEntity[]>): string {
+  buildBookShelvesFeed(result: PaginationResult<BookShelfEntity[]>, baseUrl = ''): string {
+    const path = this.externalUrl(baseUrl, '/opds/v2/bookshelves');
     const feed: OpdsV2Feed = {
       metadata: {
         title: 'Bookshelves',
         numberOfItems: result.total,
         itemsPerPage: result.limit ?? 20,
       },
-      links: [...this.baseLinks('/opds/v2/bookshelves'), ...this.paginationLinks('/opds/v2/bookshelves', result)],
+      links: [...this.baseLinks(path, baseUrl), ...this.paginationLinks(path, result)],
       navigation: result.data.map((shelf) => ({
         title: shelf.title,
-        href: `/opds/v2/bookshelves/${shelf.id}`,
+        href: this.externalUrl(baseUrl, `/opds/v2/bookshelves/${shelf.id}`),
         type: OPDS_MEDIA_TYPE.OPDS_JSON,
         rel: OPDS_LINK_REL.SUBSECTION,
       })),
@@ -143,32 +171,30 @@ export class OpdsV2Builder {
     return JSON.stringify(feed);
   }
 
-  buildBookShelfFeed(shelf: BookShelfEntity, result: PaginationResult<Book[]>): string {
+  buildBookShelfFeed(shelf: BookShelfEntity, result: PaginationResult<Book[]>, baseUrl = ''): string {
+    const path = this.externalUrl(baseUrl, `/opds/v2/bookshelves/${shelf.id}`);
     const feed: OpdsV2Feed = {
       metadata: {
         title: shelf.title,
         numberOfItems: result.total,
         itemsPerPage: result.limit ?? 20,
       },
-      links: [
-        ...this.baseLinks(`/opds/v2/bookshelves/${shelf.id}`),
-        ...this.paginationLinks(`/opds/v2/bookshelves/${shelf.id}`, result),
-      ],
-      publications: result.data.map((b) => this.bookPublication(b)),
+      links: [...this.baseLinks(path, baseUrl), ...this.paginationLinks(path, result)],
+      publications: result.data.map((b) => this.bookPublication(b, baseUrl)),
     };
     return JSON.stringify(feed);
   }
 
-  buildSearchFeed(result: PaginationResult<Book[]>, query: string): string {
-    const searchHref = `/opds/v2/search?q=${encodeURIComponent(query)}`;
+  buildSearchFeed(result: PaginationResult<Book[]>, query: string, baseUrl = ''): string {
+    const searchHref = this.externalUrl(baseUrl, `/opds/v2/search?q=${encodeURIComponent(query)}`);
     const feed: OpdsV2Feed = {
       metadata: {
         title: `Search: ${query}`,
         numberOfItems: result.total,
         itemsPerPage: result.limit ?? 20,
       },
-      links: [...this.baseLinks(searchHref), ...this.paginationLinks(searchHref, result)],
-      publications: result.data.map((b) => this.bookPublication(b)),
+      links: [...this.baseLinks(searchHref, baseUrl), ...this.paginationLinks(searchHref, result)],
+      publications: result.data.map((b) => this.bookPublication(b, baseUrl)),
     };
     return JSON.stringify(feed);
   }
