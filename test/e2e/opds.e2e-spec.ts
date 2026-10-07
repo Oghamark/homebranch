@@ -9,6 +9,7 @@ import { OpdsV1Builder } from 'src/modules/opds/opds-v1.builder';
 import { OpdsV1Controller } from 'src/modules/opds/opds-v1.controller';
 import { OpdsV2Builder } from 'src/modules/opds/opds-v2.builder';
 import { OpdsV2Controller } from 'src/modules/opds/opds-v2.controller';
+import { STORAGE_SERVICE_TOKEN } from 'src/modules/storage/storage.interface';
 
 describe('OPDS controllers (e2e)', () => {
   let app: INestApplication<App>;
@@ -52,6 +53,7 @@ describe('OPDS controllers (e2e)', () => {
         { provide: BookShelfService, useValue: mockBookShelfService },
         { provide: OpdsV1Builder, useValue: mockOpdsV1Builder },
         { provide: OpdsV2Builder, useValue: mockOpdsV2Builder },
+        { provide: STORAGE_SERVICE_TOKEN, useValue: {} },
       ],
     })
       .overrideGuard(OpdsBasicAuthGuard)
@@ -98,7 +100,7 @@ describe('OPDS controllers (e2e)', () => {
       .set('x-forwarded-prefix', '/api')
       .expect(200);
 
-    expect(JSON.parse(response.text).id).toContain('/api/opds/v1/auth');
+    expect((JSON.parse(response.text) as { id: string }).id).toContain('/api/opds/v1/auth');
   });
 
   test('serves v2 search feed from BookService', async () => {

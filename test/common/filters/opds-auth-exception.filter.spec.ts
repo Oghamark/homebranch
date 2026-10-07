@@ -45,7 +45,7 @@ describe('OpdsAuthExceptionFilter', () => {
 
     expect(responseHeaders['WWW-Authenticate']).toBe(`OPDS location="${authDocUrl}"`);
     expect(responseHeaders.Link).toContain(`<${authDocUrl}>;`);
-    expect(JSON.parse(responseBody[0]).id).toBe(authDocUrl);
+    expect((JSON.parse(responseBody[0]) as { id: string }).id).toBe(authDocUrl);
   });
 
   test('preserves the auth URL when no forwarded prefix is present', () => {
@@ -57,6 +57,6 @@ describe('OpdsAuthExceptionFilter', () => {
 
     expect(responseHeaders['WWW-Authenticate']).toBe(`OPDS location="${expectedUrl}"`);
     expect(responseHeaders.Link).toContain(`<${expectedUrl}>;`);
-    expect(JSON.parse(responseBody[0]).id).toBe(expectedUrl);
+    expect((JSON.parse(responseBody[0]) as { id: string }).id).toBe(expectedUrl);
   });
 });
