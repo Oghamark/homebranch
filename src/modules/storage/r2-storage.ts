@@ -41,7 +41,9 @@ export class R2Storage implements IStorageService {
     const r2SecretAccessKey: string = this.configService.getOrThrow('R2_SECRET_ACCESS_KEY');
 
     const jurisdiction = this.configService.get('R2_JURISDICTION');
-    const host = jurisdiction ? `${r2AccountId}.${jurisdiction}.r2.cloudflarestorage.com` : `${r2AccountId}.r2.cloudflarestorage.com`;
+    const host = jurisdiction
+      ? `${r2AccountId}.${jurisdiction}.r2.cloudflarestorage.com`
+      : `${r2AccountId}.r2.cloudflarestorage.com`;
 
     try {
       this.s3 = new S3Client({
