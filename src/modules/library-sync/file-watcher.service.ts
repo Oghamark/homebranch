@@ -2,11 +2,8 @@ import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/commo
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import * as chokidar from 'chokidar';
-import { basename, join } from 'path';
-import { Interval } from '@nestjs/schedule';
+import { basename, join, relative } from 'path';
 import { isSupportedBookFile } from 'src/modules/book/format/book-format';
-
-const POLL_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
 @Injectable()
 export class FileWatcherService implements OnModuleInit, OnModuleDestroy {
@@ -24,6 +21,19 @@ export class FileWatcherService implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleInit() {
+    const storageLocation = (process.env.STORAGE_LOCATION || 'local').toLowerCase();
+    const enableWatcher = (process.env.ENABLE_FILE_WATCHER || 'true').toLowerCase() !== 'false';
+
+    if (storageLocation !== 'local') {
+      this.logger.log(`FileWatcher disabled because STORAGE_LOCATION=${storageLocation}`);
+      return;
+    }
+
+    if (!enableWatcher) {
+      this.logger.log('FileWatcher disabled by ENABLE_FILE_WATCHER=false');
+      return;
+    }
+
     this.logger.log(`Starting file watcher on ${this.booksDirectory}`);
 
     this.watcher = chokidar.watch(this.booksDirectory, {
@@ -58,11 +68,6 @@ export class FileWatcherService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  @Interval(POLL_INTERVAL_MS)
-  async periodicScan() {
-    await this.enqueueScan('periodic');
-  }
-
   async enqueueScan(trigger: string) {
     await this.libraryScanQueue.add(
       'scan-directory',
@@ -91,23 +96,29 @@ export class FileWatcherService implements OnModuleInit, OnModuleDestroy {
     this.logger.log(`File removed: ${filePath}`);
 
     const fileName = basename(filePath);
+    const storageKey = this.toStorageKey(filePath);
     await this.libraryScanQueue.add(
       'file-removed',
-      { fileName, filePath },
+      { fileName, filePath: storageKey },
       { removeOnComplete: 100, removeOnFail: 50 },
     );
   }
 
   private async enqueueFileProcessing(filePath: string, event: string) {
     const fileName = basename(filePath);
+    const storageKey = this.toStorageKey(filePath);
     await this.libraryScanQueue.add(
       'process-file',
-      { fileName, filePath, event },
+      { fileName, filePath: storageKey, event },
       {
         jobId: `process-${fileName}-${Date.now()}`,
         removeOnComplete: 100,
         removeOnFail: 50,
       },
     );
+  }
+
+  private toStorageKey(filePath: string): string {
+    return join('books', relative(this.booksDirectory, filePath)).replace(/\\/g, '/');
   }
 }

@@ -23,8 +23,8 @@ export function buildOpdsAuthDocument(authDocUrl: string) {
 
 /**
  * Intercepts 401 responses on OPDS routes and returns an OPDS Authentication 1.0
- * document so that compliant clients (e.g. Thorium) display a login prompt.
- * Thorium discovers the auth document via the `WWW-Authenticate: OPDS location=` header.
+ * document for compliant clients (e.g. Thorium) and a Basic challenge for
+ * clients (e.g. Moon+ Reader) that use standard HTTP Basic authentication.
  */
 @Catch(UnauthorizedException)
 export class OpdsAuthExceptionFilter implements ExceptionFilter {
@@ -33,12 +33,12 @@ export class OpdsAuthExceptionFilter implements ExceptionFilter {
     const request = http.getRequest<Request>();
     const response = http.getResponse<Response>();
 
-    const baseUrl = buildExternalBaseUrl(request);
+    const baseUrl = buildExternalBaseUrl(request, { includeForwardedPrefix: true });
     const authDocUrl = `${baseUrl}/opds/v1/auth`;
 
     response
       .status(401)
-      .setHeader('WWW-Authenticate', `OPDS location="${authDocUrl}"`)
+      .setHeader('WWW-Authenticate', ['Basic realm="Homebranch"', `OPDS location="${authDocUrl}"`])
       .setHeader('Content-Type', 'application/opds-authentication+json')
       .setHeader(
         'Link',

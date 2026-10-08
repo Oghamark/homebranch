@@ -9,6 +9,7 @@ import { OpdsV1Builder } from 'src/modules/opds/opds-v1.builder';
 import { OpdsV1Controller } from 'src/modules/opds/opds-v1.controller';
 import { OpdsV2Builder } from 'src/modules/opds/opds-v2.builder';
 import { OpdsV2Controller } from 'src/modules/opds/opds-v2.controller';
+import { STORAGE_SERVICE_TOKEN } from 'src/modules/storage/storage.interface';
 
 describe('OPDS controllers (e2e)', () => {
   let app: INestApplication<App>;
@@ -52,6 +53,7 @@ describe('OPDS controllers (e2e)', () => {
         { provide: BookShelfService, useValue: mockBookShelfService },
         { provide: OpdsV1Builder, useValue: mockOpdsV1Builder },
         { provide: OpdsV2Builder, useValue: mockOpdsV2Builder },
+        { provide: STORAGE_SERVICE_TOKEN, useValue: {} },
       ],
     })
       .overrideGuard(OpdsBasicAuthGuard)
@@ -92,6 +94,26 @@ describe('OPDS controllers (e2e)', () => {
     expect(mockBookService.getNewArrivals).toHaveBeenCalledWith(20, 0);
   });
 
+  test('includes the forwarded prefix in the v1 auth document ID', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/opds/v1/auth')
+      .set('x-forwarded-prefix', '/api')
+      .expect(200);
+
+    expect((JSON.parse(response.text) as { id: string }).id).toContain('/api/opds/v1/auth');
+  });
+
+  test('passes the forwarded prefix to the v1 catalog builder', async () => {
+    await request(app.getHttpServer())
+      .get('/opds/v1/catalog')
+      .set('x-forwarded-proto', 'https')
+      .set('x-forwarded-host', 'catalog.example')
+      .set('x-forwarded-prefix', '/api')
+      .expect(200);
+
+    expect(mockOpdsV1Builder.buildCatalogFeed).toHaveBeenCalledWith('https://catalog.example/api');
+  });
+
   test('serves v2 search feed from BookService', async () => {
     mockBookService.getBooks.mockResolvedValueOnce({ data: [], total: 0, limit: 20, offset: 0, nextCursor: null });
 
@@ -100,5 +122,16 @@ describe('OPDS controllers (e2e)', () => {
     expect(response.text).toBe('{"search":true}');
     expect(mockBookService.getBooks).toHaveBeenCalledWith({ query: 'test', limit: 20, offset: 0 });
     expect(mockOpdsV2Builder.buildSearchFeed).toHaveBeenCalled();
+  });
+
+  test('passes the forwarded prefix to the v2 catalog builder', async () => {
+    await request(app.getHttpServer())
+      .get('/opds/v2/catalog')
+      .set('x-forwarded-proto', 'https')
+      .set('x-forwarded-host', 'catalog.example')
+      .set('x-forwarded-prefix', '/api')
+      .expect(200);
+
+    expect(mockOpdsV2Builder.buildCatalogFeed).toHaveBeenCalledWith('https://catalog.example/api');
   });
 });

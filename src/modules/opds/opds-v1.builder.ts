@@ -8,7 +8,11 @@ import { OPDS_LINK_REL, OPDS_MEDIA_TYPE } from 'src/modules/opds/opds-link.helpe
 
 @Injectable()
 export class OpdsV1Builder {
-  private feedHeader(feed: XMLBuilder, selfHref: string, title: string, feedId: string) {
+  private externalUrl(baseUrl: string, path: string): string {
+    return baseUrl ? `${baseUrl}${path}` : path;
+  }
+
+  private feedHeader(feed: XMLBuilder, selfHref: string, title: string, feedId: string, baseUrl: string) {
     feed
       .ele('id')
       .txt(`urn:uuid:homebranch-${feedId}`)
@@ -26,9 +30,17 @@ export class OpdsV1Builder {
       .up()
       .ele('link', { rel: OPDS_LINK_REL.SELF, href: selfHref, type: OPDS_MEDIA_TYPE.NAVIGATION })
       .up()
-      .ele('link', { rel: OPDS_LINK_REL.START, href: '/opds/v1/catalog', type: OPDS_MEDIA_TYPE.NAVIGATION })
+      .ele('link', {
+        rel: OPDS_LINK_REL.START,
+        href: this.externalUrl(baseUrl, '/opds/v1/catalog'),
+        type: OPDS_MEDIA_TYPE.NAVIGATION,
+      })
       .up()
-      .ele('link', { rel: OPDS_LINK_REL.SEARCH, href: '/opds/v1/opensearch.xml', type: OPDS_MEDIA_TYPE.OPENSEARCH })
+      .ele('link', {
+        rel: OPDS_LINK_REL.SEARCH,
+        href: this.externalUrl(baseUrl, '/opds/v1/opensearch.xml'),
+        type: OPDS_MEDIA_TYPE.OPENSEARCH,
+      })
       .up();
   }
 
@@ -57,7 +69,7 @@ export class OpdsV1Builder {
     }
   }
 
-  private bookEntry(feed: XMLBuilder, book: Book) {
+  private bookEntry(feed: XMLBuilder, book: Book, baseUrl: string) {
     const entry = feed.ele('entry');
     entry.ele('id').txt(`urn:uuid:${book.id}`).up();
     entry.ele('title').txt(book.title).up();
@@ -89,7 +101,7 @@ export class OpdsV1Builder {
       entry
         .ele('link', {
           rel: OPDS_LINK_REL.THUMBNAIL,
-          href: `/uploads/cover-images/${book.coverImageFileName}`,
+          href: this.externalUrl(baseUrl, `/uploads/cover-images/${book.coverImageFileName}`),
           type: OPDS_MEDIA_TYPE.JPEG,
         })
         .up();
@@ -97,7 +109,7 @@ export class OpdsV1Builder {
     entry
       .ele('link', {
         rel: OPDS_LINK_REL.ACQUISITION,
-        href: `/opds/v1/download/${book.id}`,
+        href: this.externalUrl(baseUrl, `/opds/v1/download/${book.id}`),
         type: OPDS_MEDIA_TYPE.EPUB,
       })
       .up();
@@ -118,9 +130,9 @@ export class OpdsV1Builder {
     };
   }
 
-  buildCatalogFeed(): string {
+  buildCatalogFeed(baseUrl = ''): string {
     const feed = this.buildFeedDoc(this.dcNamespaces());
-    this.feedHeader(feed, '/opds/v1/catalog', 'Homebranch Catalog', 'catalog');
+    this.feedHeader(feed, this.externalUrl(baseUrl, '/opds/v1/catalog'), 'Homebranch Catalog', 'catalog', baseUrl);
 
     feed
       .ele('entry')
@@ -136,7 +148,11 @@ export class OpdsV1Builder {
       .ele('content', { type: 'text' })
       .txt('Browse all books')
       .up()
-      .ele('link', { rel: OPDS_LINK_REL.SUBSECTION, href: '/opds/v1/books', type: OPDS_MEDIA_TYPE.ACQUISITION })
+      .ele('link', {
+        rel: OPDS_LINK_REL.SUBSECTION,
+        href: this.externalUrl(baseUrl, '/opds/v1/books'),
+        type: OPDS_MEDIA_TYPE.ACQUISITION,
+      })
       .up()
       .up();
 
@@ -154,7 +170,11 @@ export class OpdsV1Builder {
       .ele('content', { type: 'text' })
       .txt('Recently added books')
       .up()
-      .ele('link', { rel: OPDS_LINK_REL.SUBSECTION, href: '/opds/v1/books/new', type: OPDS_MEDIA_TYPE.ACQUISITION })
+      .ele('link', {
+        rel: OPDS_LINK_REL.SUBSECTION,
+        href: this.externalUrl(baseUrl, '/opds/v1/books/new'),
+        type: OPDS_MEDIA_TYPE.ACQUISITION,
+      })
       .up()
       .up();
 
@@ -172,32 +192,38 @@ export class OpdsV1Builder {
       .ele('content', { type: 'text' })
       .txt('Browse bookshelves')
       .up()
-      .ele('link', { rel: OPDS_LINK_REL.SUBSECTION, href: '/opds/v1/bookshelves', type: OPDS_MEDIA_TYPE.NAVIGATION })
+      .ele('link', {
+        rel: OPDS_LINK_REL.SUBSECTION,
+        href: this.externalUrl(baseUrl, '/opds/v1/bookshelves'),
+        type: OPDS_MEDIA_TYPE.NAVIGATION,
+      })
       .up()
       .up();
 
     return feed.doc().end({ prettyPrint: false });
   }
 
-  buildAllBooksFeed(result: PaginationResult<Book[]>): string {
+  buildAllBooksFeed(result: PaginationResult<Book[]>, baseUrl = ''): string {
     const feed = this.buildFeedDoc(this.dcNamespaces());
-    this.feedHeader(feed, '/opds/v1/books', 'All Books', 'all-books');
-    this.paginationLinks(feed, '/opds/v1/books', result);
-    for (const book of result.data) this.bookEntry(feed, book);
+    const path = this.externalUrl(baseUrl, '/opds/v1/books');
+    this.feedHeader(feed, path, 'All Books', 'all-books', baseUrl);
+    this.paginationLinks(feed, path, result);
+    for (const book of result.data) this.bookEntry(feed, book, baseUrl);
     return feed.doc().end({ prettyPrint: false });
   }
 
-  buildNewArrivalsFeed(result: PaginationResult<Book[]>): string {
+  buildNewArrivalsFeed(result: PaginationResult<Book[]>, baseUrl = ''): string {
     const feed = this.buildFeedDoc(this.dcNamespaces());
-    this.feedHeader(feed, '/opds/v1/books/new', 'New Arrivals', 'new-arrivals');
-    this.paginationLinks(feed, '/opds/v1/books/new', result);
-    for (const book of result.data) this.bookEntry(feed, book);
+    const path = this.externalUrl(baseUrl, '/opds/v1/books/new');
+    this.feedHeader(feed, path, 'New Arrivals', 'new-arrivals', baseUrl);
+    this.paginationLinks(feed, path, result);
+    for (const book of result.data) this.bookEntry(feed, book, baseUrl);
     return feed.doc().end({ prettyPrint: false });
   }
 
-  buildBookShelvesFeed(result: PaginationResult<BookShelfEntity[]>): string {
+  buildBookShelvesFeed(result: PaginationResult<BookShelfEntity[]>, baseUrl = ''): string {
     const feed = this.buildFeedDoc(this.dcNamespaces());
-    this.feedHeader(feed, '/opds/v1/bookshelves', 'Bookshelves', 'bookshelves');
+    this.feedHeader(feed, this.externalUrl(baseUrl, '/opds/v1/bookshelves'), 'Bookshelves', 'bookshelves', baseUrl);
 
     for (const shelf of result.data) {
       feed
@@ -216,7 +242,7 @@ export class OpdsV1Builder {
         .up()
         .ele('link', {
           rel: OPDS_LINK_REL.SUBSECTION,
-          href: `/opds/v1/bookshelves/${shelf.id}`,
+          href: this.externalUrl(baseUrl, `/opds/v1/bookshelves/${shelf.id}`),
           type: OPDS_MEDIA_TYPE.ACQUISITION,
         })
         .up()
@@ -225,23 +251,25 @@ export class OpdsV1Builder {
     return feed.doc().end({ prettyPrint: false });
   }
 
-  buildBookShelfFeed(shelf: BookShelfEntity, result: PaginationResult<Book[]>): string {
+  buildBookShelfFeed(shelf: BookShelfEntity, result: PaginationResult<Book[]>, baseUrl = ''): string {
     const feed = this.buildFeedDoc(this.dcNamespaces());
-    this.feedHeader(feed, `/opds/v1/bookshelves/${shelf.id}`, shelf.title, `shelf-${shelf.id}`);
-    this.paginationLinks(feed, `/opds/v1/bookshelves/${shelf.id}`, result);
-    for (const book of result.data) this.bookEntry(feed, book);
+    const path = this.externalUrl(baseUrl, `/opds/v1/bookshelves/${shelf.id}`);
+    this.feedHeader(feed, path, shelf.title, `shelf-${shelf.id}`, baseUrl);
+    this.paginationLinks(feed, path, result);
+    for (const book of result.data) this.bookEntry(feed, book, baseUrl);
     return feed.doc().end({ prettyPrint: false });
   }
 
-  buildSearchFeed(result: PaginationResult<Book[]>, query: string): string {
+  buildSearchFeed(result: PaginationResult<Book[]>, query: string, baseUrl = ''): string {
     const feed = this.buildFeedDoc(this.dcNamespaces());
-    this.feedHeader(feed, `/opds/v1/search?q=${encodeURIComponent(query)}`, `Search: ${query}`, 'search');
-    this.paginationLinks(feed, `/opds/v1/search?q=${encodeURIComponent(query)}`, result);
-    for (const book of result.data) this.bookEntry(feed, book);
+    const path = this.externalUrl(baseUrl, `/opds/v1/search?q=${encodeURIComponent(query)}`);
+    this.feedHeader(feed, path, `Search: ${query}`, 'search', baseUrl);
+    this.paginationLinks(feed, path, result);
+    for (const book of result.data) this.bookEntry(feed, book, baseUrl);
     return feed.doc().end({ prettyPrint: false });
   }
 
-  buildOpenSearchDescription(): string {
+  buildOpenSearchDescription(baseUrl = ''): string {
     const doc = create({ version: '1.0', encoding: 'UTF-8' })
       .ele('OpenSearchDescription', { xmlns: 'http://a9.com/-/spec/opensearch/1.1/' })
       .ele('ShortName')
@@ -255,7 +283,7 @@ export class OpdsV1Builder {
       .up()
       .ele('Url', {
         type: OPDS_MEDIA_TYPE.ACQUISITION,
-        template: '/opds/v1/search?q={searchTerms}',
+        template: this.externalUrl(baseUrl, '/opds/v1/search?q={searchTerms}'),
       })
       .up()
       .doc();
