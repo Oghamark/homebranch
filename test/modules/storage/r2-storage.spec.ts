@@ -13,6 +13,7 @@ describe('R2Storage', () => {
         {
           provide: ConfigService,
           useValue: {
+            get: jest.fn(),
             getOrThrow: jest.fn((key: string) => {
               const values: Record<string, string> = {
                 R2_BUCKET: 'test-bucket',

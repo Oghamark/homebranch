@@ -1,11 +1,12 @@
 import { Controller, Get, Param, Query, Sse, UseGuards } from '@nestjs/common';
 import { Observable } from 'rxjs';
+import { CloudAdminOnlyGuard } from 'src/common/guards/cloud-admin-only.guard';
 import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
 import { JobEventsService } from 'src/modules/jobs/job-events.service';
 import { JobsService } from 'src/modules/jobs/jobs.service';
 
 @Controller('jobs')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, CloudAdminOnlyGuard)
 export class JobController {
   constructor(
     private readonly jobsService: JobsService,
@@ -13,7 +14,6 @@ export class JobController {
   ) {}
 
   @Sse('stream')
-  @UseGuards(JwtAuthGuard)
   streamJobs(): Observable<MessageEvent> {
     return this.jobEventsService.getStream();
   }

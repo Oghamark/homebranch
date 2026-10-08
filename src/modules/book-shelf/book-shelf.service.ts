@@ -32,31 +32,32 @@ export class BookShelfService {
     };
   }
 
-  async getBookShelfById(id: string): Promise<BookShelfEntity> {
+  async getBookShelfById(id: string, ownerScope?: string): Promise<BookShelfEntity> {
     const shelf = await this.bookShelfRepository.findOne({
       where: { id },
       relations: ['books'],
     });
 
-    if (!shelf) {
+    if (!shelf || (ownerScope && shelf.createdByUserId !== ownerScope)) {
       throw new NotFoundException('Bookshelf not found');
     }
 
     return shelf;
   }
 
-  async getBookShelfBooks(id: string): Promise<PaginationResult<BookEntity[]>> {
-    await this.ensureBookShelfExists(id);
+  async getBookShelfBooks(id: string, ownerScope?: string): Promise<PaginationResult<BookEntity[]>> {
+    await this.ensureBookShelfExists(id, ownerScope);
 
-    const [books, total] = await this.bookRepository
+    const qb = this.bookRepository
       .createQueryBuilder('book')
       .innerJoin('book.bookShelves', 'shelf', 'shelf.id = :shelfId', {
         shelfId: id,
       })
-      .where('book.deletedAt IS NULL')
-      .orderBy('book.author', 'ASC')
-      .addOrderBy('book.title', 'ASC')
-      .getManyAndCount();
+      .where('book.deletedAt IS NULL');
+    if (ownerScope) {
+      qb.andWhere('book.uploadedByUserId = :ownerScope', { ownerScope });
+    }
+    const [books, total] = await qb.orderBy('book.author', 'ASC').addOrderBy('book.title', 'ASC').getManyAndCount();
 
     return {
       data: books,
@@ -65,11 +66,14 @@ export class BookShelfService {
     };
   }
 
-  async getBookShelvesByBook(bookId: string): Promise<BookShelfEntity[]> {
-    return this.bookShelfRepository
+  async getBookShelvesByBook(bookId: string, ownerScope?: string): Promise<BookShelfEntity[]> {
+    const qb = this.bookShelfRepository
       .createQueryBuilder('shelf')
-      .innerJoin('shelf.books', 'book', 'book.id = :bookId', { bookId })
-      .getMany();
+      .innerJoin('shelf.books', 'book', 'book.id = :bookId', { bookId });
+    if (ownerScope) {
+      qb.andWhere('shelf.createdByUserId = :ownerScope', { ownerScope });
+    }
+    return qb.getMany();
   }
 
   async createBookShelf(title: string, userId?: string): Promise<BookShelfEntity> {
@@ -83,28 +87,28 @@ export class BookShelfService {
     return this.bookShelfRepository.save(shelf);
   }
 
-  async deleteBookShelf(id: string): Promise<BookShelfEntity> {
-    const shelf = await this.getBookShelfById(id);
+  async deleteBookShelf(id: string, ownerScope?: string): Promise<BookShelfEntity> {
+    const shelf = await this.getBookShelfById(id, ownerScope);
     await this.bookShelfRepository.delete(id);
     return shelf;
   }
 
-  async updateBookShelf(id: string, title?: string): Promise<BookShelfEntity> {
-    const shelf = await this.getBookShelfById(id);
+  async updateBookShelf(id: string, title?: string, ownerScope?: string): Promise<BookShelfEntity> {
+    const shelf = await this.getBookShelfById(id, ownerScope);
     shelf.title = title ?? shelf.title;
     await this.bookShelfRepository.save(shelf);
     return this.getBookShelfById(id);
   }
 
-  async addBookToBookShelf(bookShelfId: string, bookId: string): Promise<BookShelfEntity> {
-    const shelf = await this.getBookShelfById(bookShelfId);
+  async addBookToBookShelf(bookShelfId: string, bookId: string, ownerScope?: string): Promise<BookShelfEntity> {
+    const shelf = await this.getBookShelfById(bookShelfId, ownerScope);
 
     if (shelf.books.find((book) => book.id === bookId)) {
       return shelf;
     }
 
     const book = await this.bookRepository.findOne({
-      where: { id: bookId, deletedAt: IsNull() },
+      where: { id: bookId, deletedAt: IsNull(), ...(ownerScope ? { uploadedByUserId: ownerScope } : {}) },
     });
 
     if (!book) {
@@ -115,8 +119,8 @@ export class BookShelfService {
     return this.getBookShelfById(bookShelfId);
   }
 
-  async removeBookFromBookShelf(bookShelfId: string, bookId: string): Promise<BookShelfEntity> {
-    const shelf = await this.getBookShelfById(bookShelfId);
+  async removeBookFromBookShelf(bookShelfId: string, bookId: string, ownerScope?: string): Promise<BookShelfEntity> {
+    const shelf = await this.getBookShelfById(bookShelfId, ownerScope);
 
     if (!shelf.books.find((book) => book.id === bookId)) {
       return shelf;
@@ -130,8 +134,10 @@ export class BookShelfService {
     return this.getBookShelfById(bookShelfId);
   }
 
-  private async ensureBookShelfExists(id: string): Promise<void> {
-    const exists = await this.bookShelfRepository.exist({ where: { id } });
+  private async ensureBookShelfExists(id: string, ownerScope?: string): Promise<void> {
+    const exists = await this.bookShelfRepository.exist({
+      where: ownerScope ? { id, createdByUserId: ownerScope } : { id },
+    });
     if (!exists) {
       throw new NotFoundException('Bookshelf not found');
     }

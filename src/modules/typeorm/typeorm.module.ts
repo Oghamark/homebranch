@@ -29,6 +29,7 @@ import { AddBookDuplicateTable1773801937488 } from 'src/migrations/1773801937488
 import { AddBookFormatTable1774652732886 } from 'src/migrations/1774652732886-AddBookFormatTable';
 import { AddMetadataToBookFormat1777224804830 } from 'src/migrations/1777224804830-AddMetadataToBookFormat';
 import { BackfillLegacyBookFormats1777228301570 } from 'src/migrations/1777228301570-BackfillLegacyBookFormats';
+import { AddFileSizeToBookFormat1790000000000 } from 'src/migrations/1790000000000-AddFileSizeToBookFormat';
 
 @Module({
   imports: [
@@ -87,6 +88,7 @@ import { BackfillLegacyBookFormats1777228301570 } from 'src/migrations/177722830
             AddBookFormatTable1774652732886,
             AddMetadataToBookFormat1777224804830,
             BackfillLegacyBookFormats1777228301570,
+            AddFileSizeToBookFormat1790000000000,
           ],
           migrationsRun: true,
           migrationsTableName: 'migration_table',

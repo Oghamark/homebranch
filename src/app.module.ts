@@ -17,6 +17,7 @@ import LocalStorage from './modules/storage/local-storage';
 import { R2Storage } from './modules/storage/r2-storage';
 import { EnvironmentVariables } from './common/types/env.interface';
 import { IStorageService, STORAGE_SERVICE_TOKEN } from './modules/storage/storage.interface';
+import { CloudModule } from './modules/cloud/cloud.module';
 import { UploadsModule } from './modules/uploads/uploads.module';
 
 @Module({
@@ -28,6 +29,8 @@ import { UploadsModule } from './modules/uploads/uploads.module';
     }),
 
     ScheduleModule.forRoot(),
+
+    CloudModule,
 
     HealthModule,
 

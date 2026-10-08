@@ -33,6 +33,17 @@ export class BookFormatEntity {
   })
   fileMtime?: number;
 
+  @Column({
+    name: 'file_size',
+    type: 'bigint',
+    nullable: true,
+    transformer: {
+      to: (v: number | undefined) => v,
+      from: (v: string | null) => (v ? Number(v) : undefined),
+    },
+  })
+  fileSize?: number;
+
   @Column({ name: 'file_content_hash', nullable: true })
   fileContentHash?: string;
 

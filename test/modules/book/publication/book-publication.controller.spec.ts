@@ -7,10 +7,12 @@ describe('BookPublicationController', () => {
   const publicationService = {};
   const bookService = {
     getDownload: jest.fn(),
+    assertAccess: jest.fn(),
   };
   const storage = {
     getFileStream: jest.fn(),
   };
+  const user = { id: 'user-1', email: 'u@x.com', roles: ['USER'] };
   const response = {
     status: jest.fn().mockReturnThis(),
     json: jest.fn(),
@@ -18,6 +20,7 @@ describe('BookPublicationController', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    bookService.assertAccess.mockResolvedValue(undefined);
   });
 
   it('streams guarded downloads from storage', async () => {
@@ -37,9 +40,24 @@ describe('BookPublicationController', () => {
       storage as never,
     );
 
-    await expect(controller.downloadBook('book-1', {}, response as never)).resolves.toBeDefined();
+    await expect(controller.downloadBook(user, 'book-1', {}, response as never)).resolves.toBeDefined();
     expect(storage.getFileStream).toHaveBeenCalledWith('books/Storage Book.epub');
     expect(response.status).not.toHaveBeenCalled();
+  });
+
+  it('checks ownership in cloud mode before downloading', async () => {
+    process.env.CLOUD_MODE = 'true';
+    bookService.assertAccess.mockRejectedValue(new NotFoundException('Book not found'));
+    const controller = new BookPublicationController(
+      publicationService as never,
+      bookService as never,
+      storage as never,
+    );
+
+    await expect(controller.downloadBook(user, 'book-1', {}, response as never)).rejects.toThrow(NotFoundException);
+    expect(bookService.assertAccess).toHaveBeenCalledWith('book-1', 'user-1');
+    expect(bookService.getDownload).not.toHaveBeenCalled();
+    delete process.env.CLOUD_MODE;
   });
 
   it('preserves the existing 404 response shape for missing files', async () => {
@@ -55,7 +73,7 @@ describe('BookPublicationController', () => {
       storage as never,
     );
 
-    await controller.downloadBook('book-1', {}, response as never);
+    await controller.downloadBook(user, 'book-1', {}, response as never);
 
     expect(response.status).toHaveBeenCalledWith(404);
     expect(response.json).toHaveBeenCalledWith({

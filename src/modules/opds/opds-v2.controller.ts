@@ -1,3 +1,4 @@
+import { tenantScope, TenantUser } from 'src/common/utils/cloud';
 import { Controller, Get, Header, Logger, Param, Query, Req, UseFilters, UseGuards } from '@nestjs/common';
 import { OpdsBasicAuthGuard } from 'src/common/guards/opds-basic-auth.guard';
 import { OpdsAuthExceptionFilter } from 'src/common/filters/opds-auth-exception.filter';
@@ -9,6 +10,8 @@ import { Request } from 'express';
 import { buildExternalBaseUrl } from 'src/common/utils/external-url';
 
 const DEFAULT_LIMIT = 20;
+
+const ownerScope = (request: Request): string | undefined => tenantScope(request.user as TenantUser);
 
 @Controller('opds/v2')
 @UseGuards(OpdsBasicAuthGuard)
@@ -37,7 +40,11 @@ export class OpdsV2Controller {
     @Query('offset') offset?: number,
   ): Promise<string> {
     this.logger.log(`OPDS v2 all books request received (limit: ${limit ?? DEFAULT_LIMIT}, offset: ${offset ?? 0})`);
-    const books = await this.bookService.getBooks({ limit: limit ?? DEFAULT_LIMIT, offset: offset ?? 0 });
+    const books = await this.bookService.getBooks({
+      limit: limit ?? DEFAULT_LIMIT,
+      offset: offset ?? 0,
+      userId: ownerScope(request),
+    });
     return this.opdsV2Builder.buildAllBooksFeed(books, buildExternalBaseUrl(request, { includeForwardedPrefix: true }));
   }
 
@@ -49,7 +56,7 @@ export class OpdsV2Controller {
     @Query('offset') offset?: number,
   ): Promise<string> {
     this.logger.log(`OPDS v2 new arrivals request received (limit: ${limit ?? DEFAULT_LIMIT}, offset: ${offset ?? 0})`);
-    const books = await this.bookService.getNewArrivals(limit ?? DEFAULT_LIMIT, offset ?? 0);
+    const books = await this.bookService.getNewArrivals(limit ?? DEFAULT_LIMIT, offset ?? 0, ownerScope(request));
     return this.opdsV2Builder.buildNewArrivalsFeed(
       books,
       buildExternalBaseUrl(request, { includeForwardedPrefix: true }),
@@ -64,7 +71,7 @@ export class OpdsV2Controller {
     @Query('offset') offset?: number,
   ): Promise<string> {
     this.logger.log(`OPDS v2 bookshelves request received (limit: ${limit ?? DEFAULT_LIMIT}, offset: ${offset ?? 0})`);
-    const result = await this.bookShelfService.getBookShelves(limit ?? DEFAULT_LIMIT, offset ?? 0);
+    const result = await this.bookShelfService.getBookShelves(limit ?? DEFAULT_LIMIT, offset ?? 0, ownerScope(request));
     return this.opdsV2Builder.buildBookShelvesFeed(
       result,
       buildExternalBaseUrl(request, { includeForwardedPrefix: true }),
@@ -75,8 +82,8 @@ export class OpdsV2Controller {
   @Header('Content-Type', OPDS_MEDIA_TYPE.OPDS_JSON)
   async getBookshelfBooks(@Req() request: Request, @Param('id') id: string): Promise<string> {
     this.logger.log(`OPDS v2 bookshelf request received (id: ${id})`);
-    const shelfResult = await this.bookShelfService.getBookShelfById(id);
-    const booksResult = await this.bookShelfService.getBookShelfBooks(id);
+    const shelfResult = await this.bookShelfService.getBookShelfById(id, ownerScope(request));
+    const booksResult = await this.bookShelfService.getBookShelfBooks(id, ownerScope(request));
     return this.opdsV2Builder.buildBookShelfFeed(
       shelfResult,
       booksResult,
@@ -99,6 +106,7 @@ export class OpdsV2Controller {
       query: q ?? '',
       limit: limit ?? DEFAULT_LIMIT,
       offset: offset ?? 0,
+      userId: ownerScope(request),
     });
     return this.opdsV2Builder.buildSearchFeed(
       result,

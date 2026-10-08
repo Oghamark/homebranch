@@ -48,8 +48,8 @@ export class BookService {
     return this.bookPersistenceService.findBooks(limit, offset, userId, viewerUserId);
   }
 
-  async getNewArrivals(limit?: number, offset?: number): Promise<PaginationResult<Book[]>> {
-    return this.bookPersistenceService.findNewArrivals(limit, offset);
+  async getNewArrivals(limit?: number, offset?: number, ownerScope?: string): Promise<PaginationResult<Book[]>> {
+    return this.bookPersistenceService.findNewArrivals(limit, offset, ownerScope);
   }
 
   async getFavoriteBooks({
@@ -76,8 +76,15 @@ export class BookService {
     return this.bookPersistenceService.findFavoriteBooks(limit, offset, userId);
   }
 
-  async getBookById(id: string, viewerUserId?: string): Promise<Book> {
-    return this.bookPersistenceService.findBookById(id, viewerUserId);
+  async getBookById(id: string, viewerUserId?: string, ownerScope?: string): Promise<Book> {
+    return this.bookPersistenceService.findBookById(id, viewerUserId, ownerScope);
+  }
+
+  /** Throws NotFound when ownerScope is set and the book is not owned by that user. */
+  async assertAccess(id: string, ownerScope?: string): Promise<void> {
+    if (ownerScope) {
+      await this.bookPersistenceService.findBookById(id, undefined, ownerScope);
+    }
   }
 
   async toggleFavorite(userId: string, bookId: string): Promise<{ isFavorite: boolean }> {
@@ -135,8 +142,8 @@ export class BookService {
     return this.bookPersistenceService.updateBookRecord(id, book);
   }
 
-  async getDownload(id: string, format?: BookFormatType): Promise<DownloadBookResult> {
-    const book = await this.bookPersistenceService.findBookById(id);
+  async getDownload(id: string, format?: BookFormatType, ownerScope?: string): Promise<DownloadBookResult> {
+    const book = await this.bookPersistenceService.findBookById(id, undefined, ownerScope);
     const selectedFormat = getRequestedBookFormatFromBook(book, format);
 
     if (!selectedFormat) {

@@ -20,8 +20,10 @@ import { BookFileMetadata } from 'src/modules/book/format/book-file-metadata.int
 import { randomUUID } from 'crypto';
 import { BookPersistenceService } from 'src/modules/book/persistence/book.persistence';
 import { IStorageService, STORAGE_SERVICE_TOKEN } from '../../storage/storage.interface';
-import { unlink } from 'fs-extra';
+import { stat, unlink } from 'fs-extra';
 import { tmpdir } from 'os';
+import { StorageQuotaService } from 'src/modules/cloud/storage-quota.service';
+import { isCloudMode } from 'src/common/utils/cloud';
 
 export type CreateBookResponse = Book | { skipped: true; existingBook: Book };
 
@@ -35,6 +37,7 @@ export class BookCreationService {
     private readonly contentHashService: ContentHashService,
     private readonly bookFormatProcessingService: BookFormatProcessingService,
     private readonly bookPersistenceService: BookPersistenceService,
+    private readonly storageQuota: StorageQuotaService,
 
     @Inject(STORAGE_SERVICE_TOKEN)
     private readonly storage: IStorageService,
@@ -43,6 +46,11 @@ export class BookCreationService {
   async createBook(dto: CreateBookRequest): Promise<CreateBookResponse> {
     if (!dto.filePath) {
       throw new BadRequestException('A file must be provided');
+    }
+
+    const fileSize = (await stat(dto.filePath)).size;
+    if (isCloudMode() && dto.uploadedByUserId) {
+      await this.storageQuota.assertCanStore(dto.uploadedByUserId, fileSize);
     }
 
     const originalFileName = basename(dto.filePath);
@@ -118,9 +126,15 @@ export class BookCreationService {
       this.throwMissingMetadata('author');
     }
 
-    const preferredBook = await this.findMatchingBook(enrichedDto.title, enrichedDto.author, enrichedDto.isbn);
+    const ownerScope = isCloudMode() ? enrichedDto.uploadedByUserId : undefined;
+    const preferredBook = await this.findMatchingBook(
+      enrichedDto.title,
+      enrichedDto.author,
+      enrichedDto.isbn,
+      ownerScope,
+    );
     const contentHash = await this.contentHashService.computeHash(incomingPath);
-    const existingByHash = await this.bookPersistenceService.findBookByContentHash(contentHash);
+    const existingByHash = await this.bookPersistenceService.findBookByContentHash(contentHash, false, ownerScope);
 
     if (
       existingByHash &&
@@ -135,11 +149,12 @@ export class BookCreationService {
       return { skipped: true, existingBook: preferredBook };
     }
 
-    const desiredFileName = FileNameGenerator.generate(
+    const baseFileName = FileNameGenerator.generate(
       enrichedDto.author,
       enrichedDto.title,
       getBookFormatExtension(detectedFormat),
     );
+    const desiredFileName = ownerScope ? `${ownerScope}_${baseFileName}` : baseFileName;
     const finalFileName = await this.resolveUniqueFileName(desiredFileName);
     enrichedDto.fileName = finalFileName;
     const newFormat = Object.assign(new BookFormatEntity(), {
@@ -147,6 +162,7 @@ export class BookCreationService {
       format: detectedFormat,
       fileName: finalFileName,
       fileContentHash: contentHash,
+      fileSize,
       ...buildBookFormatMetadata(fileMetadata, originalFileName, enrichedDto.coverImageFileName),
     });
 
@@ -270,9 +286,14 @@ export class BookCreationService {
     return Number.isNaN(yearNumber) ? undefined : yearNumber;
   }
 
-  private async findMatchingBook(title: string, author: string, isbn?: string): Promise<Book | undefined> {
+  private async findMatchingBook(
+    title: string,
+    author: string,
+    isbn?: string,
+    ownerScope?: string,
+  ): Promise<Book | undefined> {
     if (isbn) {
-      const byIsbn = await this.bookPersistenceService.searchBooksWithFilters({ isbn }, 10, 0);
+      const byIsbn = await this.bookPersistenceService.searchBooksWithFilters({ isbn }, 10, 0, ownerScope);
       const match = byIsbn.data.find((book) => logicalBookMatches(book, { title, author, isbn }));
       if (match) {
         try {
@@ -283,7 +304,13 @@ export class BookCreationService {
       }
     }
 
-    const byAuthorAndTitle = await this.bookPersistenceService.searchBooksByAuthorAndTitle(author, title, 10, 0);
+    const byAuthorAndTitle = await this.bookPersistenceService.searchBooksByAuthorAndTitle(
+      author,
+      title,
+      10,
+      0,
+      ownerScope,
+    );
     const byAuthorMatch = byAuthorAndTitle.data.find((book) => logicalBookMatches(book, { title, author, isbn }));
     if (byAuthorMatch) {
       try {
@@ -293,7 +320,7 @@ export class BookCreationService {
       }
     }
 
-    const byTitle = await this.bookPersistenceService.searchBooksWithFilters({ query: title }, 20, 0);
+    const byTitle = await this.bookPersistenceService.searchBooksWithFilters({ query: title }, 20, 0, ownerScope);
     const byTitleMatch = byTitle.data.find((book) => logicalBookMatches(book, { title, author, isbn }));
     if (byTitleMatch) {
       try {
