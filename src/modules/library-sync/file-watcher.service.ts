@@ -29,6 +29,11 @@ export class FileWatcherService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
+    if (process.env.CLOUD_MODE === 'true') {
+      this.logger.log('FileWatcher disabled in CLOUD_MODE');
+      return;
+    }
+
     if (!enableWatcher) {
       this.logger.log('FileWatcher disabled by ENABLE_FILE_WATCHER=false');
       return;

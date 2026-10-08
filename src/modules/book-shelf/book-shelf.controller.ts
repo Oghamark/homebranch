@@ -1,3 +1,4 @@
+import { tenantScope } from 'src/common/utils/cloud';
 import { Body, Controller, Delete, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
 import { PaginatedQuery } from 'src/common/core/paginated-query';
@@ -20,20 +21,20 @@ export class BookShelfController {
 
   @Get('by-book/:bookId')
   @UseGuards(JwtAuthGuard)
-  getBookShelvesByBook(@Param('bookId') bookId: string) {
-    return this.bookShelfService.getBookShelvesByBook(bookId);
+  getBookShelvesByBook(@CurrentUser() currentUser: Express.User, @Param('bookId') bookId: string) {
+    return this.bookShelfService.getBookShelvesByBook(bookId, tenantScope(currentUser));
   }
 
   @Get(`:id/books`)
   @UseGuards(JwtAuthGuard)
-  getBookShelfBooksById(@Param('id') id: string) {
-    return this.bookShelfService.getBookShelfBooks(id);
+  getBookShelfBooksById(@CurrentUser() currentUser: Express.User, @Param('id') id: string) {
+    return this.bookShelfService.getBookShelfBooks(id, tenantScope(currentUser));
   }
 
   @Get(`:id`)
   @UseGuards(JwtAuthGuard)
-  getBookShelfById(@Param('id') id: string) {
-    return this.bookShelfService.getBookShelfById(id);
+  getBookShelfById(@CurrentUser() currentUser: Express.User, @Param('id') id: string) {
+    return this.bookShelfService.getBookShelfById(id, tenantScope(currentUser));
   }
 
   @Post()
@@ -48,25 +49,41 @@ export class BookShelfController {
 
   @Delete(`:id`)
   @UseGuards(JwtAuthGuard)
-  deleteBookShelf(@Param('id') id: string) {
-    return this.bookShelfService.deleteBookShelf(id);
+  deleteBookShelf(@CurrentUser() currentUser: Express.User, @Param('id') id: string) {
+    return this.bookShelfService.deleteBookShelf(id, tenantScope(currentUser));
   }
 
   @Put(`:id`)
   @UseGuards(JwtAuthGuard)
-  updateBookShelf(@Param('id') id: string, @Body() updateBookShelfDto: UpdateBookShelfDto) {
-    return this.bookShelfService.updateBookShelf(id, updateBookShelfDto.title);
+  updateBookShelf(
+    @CurrentUser() currentUser: Express.User,
+    @Param('id') id: string,
+    @Body() updateBookShelfDto: UpdateBookShelfDto,
+  ) {
+    return this.bookShelfService.updateBookShelf(id, updateBookShelfDto.title, tenantScope(currentUser));
   }
 
   @Put(`:id/add-book`)
   @UseGuards(JwtAuthGuard)
-  addBookToBookShelf(@Param('id') id: string, @Body() addBookToBookShelfDto: AddBookToBookShelfDto) {
-    return this.bookShelfService.addBookToBookShelf(id, addBookToBookShelfDto.bookId);
+  addBookToBookShelf(
+    @CurrentUser() currentUser: Express.User,
+    @Param('id') id: string,
+    @Body() addBookToBookShelfDto: AddBookToBookShelfDto,
+  ) {
+    return this.bookShelfService.addBookToBookShelf(id, addBookToBookShelfDto.bookId, tenantScope(currentUser));
   }
 
   @Put(`:id/remove-book`)
   @UseGuards(JwtAuthGuard)
-  removeBookFromBookShelf(@Param('id') id: string, @Body() removeBookFromBookShelfDto: RemoveBookFromBookShelfDto) {
-    return this.bookShelfService.removeBookFromBookShelf(id, removeBookFromBookShelfDto.bookId);
+  removeBookFromBookShelf(
+    @CurrentUser() currentUser: Express.User,
+    @Param('id') id: string,
+    @Body() removeBookFromBookShelfDto: RemoveBookFromBookShelfDto,
+  ) {
+    return this.bookShelfService.removeBookFromBookShelf(
+      id,
+      removeBookFromBookShelfDto.bookId,
+      tenantScope(currentUser),
+    );
   }
 }

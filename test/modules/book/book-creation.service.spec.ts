@@ -10,7 +10,14 @@ import { BookFormatEntity } from 'src/modules/book/format/book-format.entity';
 import { BookFormatType } from 'src/modules/book/format/book-format-type.enum';
 import { BookPersistenceService } from 'src/modules/book/persistence/book.persistence';
 import { mockBook } from 'test/mocks/bookMocks';
+import { StorageQuotaService } from 'src/modules/cloud/storage-quota.service';
+import { PayloadTooLargeException } from '@nestjs/common';
 import { IStorageService } from 'src/modules/storage/storage.interface';
+
+jest.mock('fs-extra', () => ({
+  stat: jest.fn().mockResolvedValue({ size: 1000 }),
+  unlink: jest.fn().mockResolvedValue(undefined),
+}));
 
 describe('BookCreationService', () => {
   let service: BookCreationService;
@@ -20,6 +27,7 @@ describe('BookCreationService', () => {
   let storage: ReturnType<typeof mock<IStorageService>>;
   let bookFormatProcessingService: ReturnType<typeof mock<BookFormatProcessingService>>;
   let bookPersistenceService: jest.Mocked<BookPersistenceService>;
+  let storageQuota: ReturnType<typeof mock<StorageQuotaService>>;
 
   beforeEach(() => {
     duplicateRegistrationService = mock<BookDuplicateRegistrationService>();
@@ -36,12 +44,14 @@ describe('BookCreationService', () => {
       createBookRecord: jest.fn(),
     } as unknown as jest.Mocked<BookPersistenceService>;
 
+    storageQuota = mock<StorageQuotaService>();
     service = new BookCreationService(
       duplicateRegistrationService,
       metadataGateway,
       contentHashService,
       bookFormatProcessingService,
       bookPersistenceService,
+      storageQuota,
       storage,
     );
 
@@ -69,6 +79,18 @@ describe('BookCreationService', () => {
     });
     contentHashService.computeHash.mockResolvedValue('abc123hash');
     duplicateRegistrationService.flagPotentialDuplicate.mockResolvedValue(undefined);
+  });
+
+  it('rejects uploads over the storage quota in cloud mode before storing anything', async () => {
+    process.env.CLOUD_MODE = 'true';
+    storageQuota.assertCanStore.mockRejectedValue(new PayloadTooLargeException('Storage quota exceeded'));
+
+    await expect(
+      service.createBook({ filePath: '/tmp/uploads/test-book.epub', uploadedByUserId: 'user-1' } as never),
+    ).rejects.toThrow(PayloadTooLargeException);
+    expect(storageQuota.assertCanStore).toHaveBeenCalledWith('user-1', 1000);
+    expect(storage.uploadFileFromPath).not.toHaveBeenCalled();
+    delete process.env.CLOUD_MODE;
   });
 
   afterEach(() => {

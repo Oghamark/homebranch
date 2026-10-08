@@ -1,3 +1,4 @@
+import { tenantScope } from 'src/common/utils/cloud';
 import {
   Body,
   Controller,
@@ -67,7 +68,11 @@ export class BookController {
   @UseGuards(JwtAuthGuard)
   getBooks(@Query() paginationDto: GetBooksRequest, @CurrentUser() currentUser: Express.User) {
     this.logger.log('Get books request received');
-    return this.bookService.getBooks({ ...paginationDto, viewerUserId: currentUser.id });
+    return this.bookService.getBooks({
+      ...paginationDto,
+      userId: tenantScope(currentUser) ?? paginationDto.userId,
+      viewerUserId: currentUser.id,
+    });
   }
 
   @Get('favorite')
@@ -79,8 +84,9 @@ export class BookController {
 
   @Put(':id/favorite')
   @UseGuards(JwtAuthGuard)
-  toggleFavorite(@Param('id') id: string, @CurrentUser() currentUser: Express.User) {
+  async toggleFavorite(@Param('id') id: string, @CurrentUser() currentUser: Express.User) {
     this.logger.log('Favorite book request received');
+    await this.bookService.assertAccess(id, tenantScope(currentUser));
     return this.bookService.toggleFavorite(currentUser.id, id);
   }
 
@@ -88,7 +94,7 @@ export class BookController {
   @UseGuards(JwtAuthGuard)
   getBookById(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() currentUser: Express.User) {
     this.logger.log('Get book by id request received');
-    return this.bookService.getBookById(id, currentUser.id);
+    return this.bookService.getBookById(id, currentUser.id, tenantScope(currentUser));
   }
 
   @Post()
@@ -176,8 +182,9 @@ export class BookController {
 
   @Delete(`:id`)
   @UseGuards(JwtAuthGuard)
-  deleteBook(@CurrentUser() currentUser: Express.User, @Param('id') id: string) {
+  async deleteBook(@CurrentUser() currentUser: Express.User, @Param('id') id: string) {
     this.logger.log('Delete book request received');
+    await this.bookService.assertAccess(id, tenantScope(currentUser));
     return this.bookService.deleteBook(id, currentUser.id, currentUser.roles?.includes('ADMIN') ?? false);
   }
 
@@ -199,8 +206,13 @@ export class BookController {
 
   @Put(`:id`)
   @UseGuards(JwtAuthGuard)
-  updateBook(@Param('id') id: string, @Body() updateBookDto: UpdateBookDto) {
+  async updateBook(
+    @Param('id') id: string,
+    @Body() updateBookDto: UpdateBookDto,
+    @CurrentUser() currentUser: Express.User,
+  ) {
     this.logger.log('Update book request received');
+    await this.bookService.assertAccess(id, tenantScope(currentUser));
     const updateBookRequest: UpdateBookRequest = {
       id,
       ...updateBookDto,
@@ -210,8 +222,10 @@ export class BookController {
 
   @Post(':id/link')
   @UseGuards(JwtAuthGuard)
-  linkBooks(@Param('id') id: string, @Body() dto: LinkBooksDto, @CurrentUser() currentUser: Express.User) {
+  async linkBooks(@Param('id') id: string, @Body() dto: LinkBooksDto, @CurrentUser() currentUser: Express.User) {
     this.logger.log('Link book formats request received');
+    await this.bookService.assertAccess(id, tenantScope(currentUser));
+    await this.bookService.assertAccess(dto.sourceBookId, tenantScope(currentUser));
     return this.bookMutationService.linkBooks({
       targetBookId: id,
       sourceBookId: dto.sourceBookId,
@@ -222,12 +236,13 @@ export class BookController {
 
   @Delete(':id/formats/:formatId')
   @UseGuards(JwtAuthGuard)
-  unlinkBookFormat(
+  async unlinkBookFormat(
     @Param('id') id: string,
     @Param('formatId') formatId: string,
     @CurrentUser() currentUser: Express.User,
   ) {
     this.logger.log('Unling book format request received');
+    await this.bookService.assertAccess(id, tenantScope(currentUser));
     return this.bookMutationService.unlinkBookFormat({
       bookId: id,
       formatId,
@@ -238,15 +253,17 @@ export class BookController {
 
   @Post(':id/fetch-metadata')
   @UseGuards(JwtAuthGuard)
-  fetchBookMetadata(@Param('id') id: string) {
+  async fetchBookMetadata(@Param('id') id: string, @CurrentUser() currentUser: Express.User) {
     this.logger.log('Fetch book metadata request received');
+    await this.bookService.assertAccess(id, tenantScope(currentUser));
     return this.bookService.fetchBookMetadata(id);
   }
 
   @Post(':id/fetch-summary')
   @UseGuards(JwtAuthGuard)
-  fetchBookSummary(@Param('id') id: string) {
+  async fetchBookSummary(@Param('id') id: string, @CurrentUser() currentUser: Express.User) {
     this.logger.log('Fetch book summary request received');
+    await this.bookService.assertAccess(id, tenantScope(currentUser));
     return this.bookService.fetchBookSummary(id);
   }
 }

@@ -1,3 +1,5 @@
+import { CurrentUser } from 'src/common/decorators/current-user.decorator';
+import { tenantScope } from 'src/common/utils/cloud';
 import {
   Controller,
   Get,
@@ -41,11 +43,13 @@ export class BookPublicationController {
   @Get(':id/manifest')
   @UseGuards(JwtAuthGuard)
   async getBookManifest(
+    @CurrentUser() currentUser: Express.User,
     @Param('id') id: string,
     @Query() query: BookFormatQueryDto,
     @Req() req: Request,
     @Res({ passthrough: true }) response: Response,
   ): Promise<object | void> {
+    await this.bookService.assertAccess(id, tenantScope(currentUser));
     const baseUrl = buildExternalBaseUrl(req, { includeForwardedPrefix: true });
     const result = await this.bookPublicationService.getManifest(id, baseUrl, query.format);
     response.setHeader('Content-Type', 'application/webpub+json');
@@ -55,11 +59,13 @@ export class BookPublicationController {
   @Get(':id/content/*path')
   @UseGuards(JwtAuthGuard)
   async getBookContent(
+    @CurrentUser() currentUser: Express.User,
     @Param('id') id: string,
     @Param('path') path: string[],
     @Query() query: BookFormatQueryDto,
     @Res() response: Response,
   ): Promise<void> {
+    await this.bookService.assertAccess(id, tenantScope(currentUser));
     const entryPath = path.map(decodeURIComponent).join('/');
     const { data, mediaType } = await this.bookPublicationService.getContent(id, entryPath, query.format);
     response.setHeader('Content-Type', mediaType);
@@ -70,10 +76,12 @@ export class BookPublicationController {
   @Get(':id/download')
   @UseGuards(JwtAuthGuard)
   async downloadBook(
+    @CurrentUser() currentUser: Express.User,
     @Param('id') id: string,
     @Query() query: BookFormatQueryDto,
     @Res({ passthrough: true }) response: Response,
   ): Promise<StreamableFile | void> {
+    await this.bookService.assertAccess(id, tenantScope(currentUser));
     const { book, format, fileName } = await this.bookService.getDownload(id, query.format);
     const sanitizedTitle = book.title.replace(/[^\w\s-]/g, '').trim() || 'book';
     const safeFileName = basename(fileName);

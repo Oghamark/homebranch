@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Header, Logger, Param, Post, Query, Sse, UseGuards } from '@nestjs/common';
 import { IsArray, IsOptional, IsUUID } from 'class-validator';
+import { CloudAdminOnlyGuard } from 'src/common/guards/cloud-admin-only.guard';
 import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/common/guards/roles.guard';
 import { Roles } from 'src/common/guards/roles.decorator';
@@ -30,6 +31,7 @@ export class LibrarySyncController {
   ) {}
 
   @Sse('events')
+  @UseGuards(JwtAuthGuard, CloudAdminOnlyGuard)
   @Header('Cache-Control', 'no-cache')
   @Header('X-Accel-Buffering', 'no')
   streamEvents(): Observable<MessageEvent> {
@@ -37,14 +39,14 @@ export class LibrarySyncController {
   }
 
   @Post('scan')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, CloudAdminOnlyGuard)
   async triggerScan() {
     this.logger.log('Trigger Library Sync Scan Request Received');
     return this.librarySyncService.triggerScan();
   }
 
   @Post('books/:id/sync')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, CloudAdminOnlyGuard)
   async triggerBookSync(@Param('id') id: string) {
     return this.librarySyncService.triggerBookMetadataSync(id);
   }

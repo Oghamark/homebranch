@@ -91,7 +91,7 @@ describe('OPDS controllers (e2e)', () => {
     const response = await request(app.getHttpServer()).get('/opds/v1/books/new').expect(200);
 
     expect(response.text).toBe('<new />');
-    expect(mockBookService.getNewArrivals).toHaveBeenCalledWith(20, 0);
+    expect(mockBookService.getNewArrivals).toHaveBeenCalledWith(20, 0, undefined);
   });
 
   test('includes the forwarded prefix in the v1 auth document ID', async () => {

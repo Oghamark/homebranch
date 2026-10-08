@@ -16,6 +16,9 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { randomUUID } from 'crypto';
 import { join } from 'path';
+import { CloudAdminOnlyGuard } from 'src/common/guards/cloud-admin-only.guard';
+import { tenantScope } from 'src/common/utils/cloud';
+import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
 import { PaginatedQuery } from 'src/common/core/paginated-query';
 import { UpdateAuthorDto } from 'src/modules/author/dto/update-author.dto';
@@ -32,12 +35,12 @@ export class AuthorController {
   ) {}
 
   @Get()
-  getAuthors(@Query() paginatedQuery: PaginatedQuery & { userId?: string }) {
+  getAuthors(@CurrentUser() currentUser: Express.User, @Query() paginatedQuery: PaginatedQuery & { userId?: string }) {
     return this.authorService.getAuthors(
       paginatedQuery.query,
       paginatedQuery.limit,
       paginatedQuery.offset,
-      paginatedQuery.userId,
+      tenantScope(currentUser) ?? paginatedQuery.userId,
     );
   }
 
@@ -47,22 +50,28 @@ export class AuthorController {
   }
 
   @Get(':name/books')
-  getBooksByAuthor(@Param('name') name: string, @Query() paginatedQuery: PaginatedQuery & { userId?: string }) {
+  getBooksByAuthor(
+    @CurrentUser() currentUser: Express.User,
+    @Param('name') name: string,
+    @Query() paginatedQuery: PaginatedQuery & { userId?: string },
+  ) {
     return this.authorService.getBooksByAuthor(
       name,
       paginatedQuery.query,
       paginatedQuery.limit,
       paginatedQuery.offset,
-      paginatedQuery.userId,
+      tenantScope(currentUser) ?? paginatedQuery.userId,
     );
   }
 
   @Patch(':name')
+  @UseGuards(CloudAdminOnlyGuard)
   updateAuthor(@Param('name') name: string, @Body() updateAuthorDto: UpdateAuthorDto) {
     return this.authorService.updateAuthor(name, updateAuthorDto.biography);
   }
 
   @Post(':name/profile-picture')
+  @UseGuards(CloudAdminOnlyGuard)
   @UseInterceptors(
     FileInterceptor('file', {
       storage: diskStorage({

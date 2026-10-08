@@ -1,3 +1,4 @@
+import { tenantScope, TenantUser } from 'src/common/utils/cloud';
 import {
   Controller,
   Get,
@@ -25,6 +26,8 @@ import { IStorageService, STORAGE_SERVICE_TOKEN } from '../storage/storage.inter
 import { Readable } from 'node:stream';
 
 const DEFAULT_LIMIT = 20;
+
+const ownerScope = (request: Request): string | undefined => tenantScope(request.user as TenantUser);
 
 @Controller('opds/v1')
 @UseFilters(OpdsAuthExceptionFilter)
@@ -55,7 +58,11 @@ export class OpdsV1Controller {
     @Query('offset') offset?: number,
   ): Promise<string> {
     this.logger.log(`OPDS v1 all books request received (limit: ${limit ?? DEFAULT_LIMIT}, offset: ${offset ?? 0})`);
-    const books = await this.bookService.getBooks({ limit: limit ?? DEFAULT_LIMIT, offset: offset ?? 0 });
+    const books = await this.bookService.getBooks({
+      limit: limit ?? DEFAULT_LIMIT,
+      offset: offset ?? 0,
+      userId: ownerScope(request),
+    });
     return this.opdsV1Builder.buildAllBooksFeed(books, buildExternalBaseUrl(request, { includeForwardedPrefix: true }));
   }
 
@@ -68,7 +75,7 @@ export class OpdsV1Controller {
     @Query('offset') offset?: number,
   ): Promise<string> {
     this.logger.log(`OPDS v1 new arrivals request received (limit: ${limit ?? DEFAULT_LIMIT}, offset: ${offset ?? 0})`);
-    const books = await this.bookService.getNewArrivals(limit ?? DEFAULT_LIMIT, offset ?? 0);
+    const books = await this.bookService.getNewArrivals(limit ?? DEFAULT_LIMIT, offset ?? 0, ownerScope(request));
     return this.opdsV1Builder.buildNewArrivalsFeed(
       books,
       buildExternalBaseUrl(request, { includeForwardedPrefix: true }),
@@ -84,7 +91,7 @@ export class OpdsV1Controller {
     @Query('offset') offset?: number,
   ): Promise<string> {
     this.logger.log(`OPDS v1 bookshelves request received (limit: ${limit ?? DEFAULT_LIMIT}, offset: ${offset ?? 0})`);
-    const result = await this.bookShelfService.getBookShelves(limit ?? DEFAULT_LIMIT, offset ?? 0);
+    const result = await this.bookShelfService.getBookShelves(limit ?? DEFAULT_LIMIT, offset ?? 0, ownerScope(request));
     return this.opdsV1Builder.buildBookShelvesFeed(
       result,
       buildExternalBaseUrl(request, { includeForwardedPrefix: true }),
@@ -96,8 +103,8 @@ export class OpdsV1Controller {
   @Header('Content-Type', OPDS_MEDIA_TYPE.CATALOG)
   async getBookshelfBooks(@Req() request: Request, @Param('id') id: string): Promise<string> {
     this.logger.log(`OPDS v1 bookshelf request received (id: ${id})`);
-    const shelfResult = await this.bookShelfService.getBookShelfById(id);
-    const booksResult = await this.bookShelfService.getBookShelfBooks(id);
+    const shelfResult = await this.bookShelfService.getBookShelfById(id, ownerScope(request));
+    const booksResult = await this.bookShelfService.getBookShelfBooks(id, ownerScope(request));
     return this.opdsV1Builder.buildBookShelfFeed(
       shelfResult,
       booksResult,
@@ -121,6 +128,7 @@ export class OpdsV1Controller {
       query: q ?? '',
       limit: limit ?? DEFAULT_LIMIT,
       offset: offset ?? 0,
+      userId: ownerScope(request),
     });
     return this.opdsV1Builder.buildSearchFeed(
       result,
@@ -151,9 +159,9 @@ export class OpdsV1Controller {
 
   @Get('download/:id')
   @UseGuards(OpdsBasicAuthGuard)
-  async downloadBook(@Param('id') id: string): Promise<StreamableFile | void> {
+  async downloadBook(@Req() request: Request, @Param('id') id: string): Promise<StreamableFile | void> {
     this.logger.log(`OPDS v1 download request received (book id: ${id})`);
-    const { book, format, fileName } = await this.bookService.getDownload(id);
+    const { book, format, fileName } = await this.bookService.getDownload(id, undefined, ownerScope(request));
     const sanitizedTitle = book.title.replace(/[^\w\s-]/g, '').trim() || 'book';
 
     const storageStreamResult = await this.storage.getFileStream(`books/${fileName}`);

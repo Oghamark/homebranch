@@ -53,8 +53,8 @@ export class BookPersistenceService {
     );
   }
 
-  findNewArrivals(limit?: number, offset?: number): Promise<PaginationResult<Book[]>> {
-    return findNewArrivals(this.bookRepository, this.formatRepository, limit, offset);
+  findNewArrivals(limit?: number, offset?: number, ownerScope?: string): Promise<PaginationResult<Book[]>> {
+    return findNewArrivals(this.bookRepository, this.formatRepository, limit, offset, ownerScope);
   }
 
   findFavoriteBooks(limit?: number, offset?: number, userId?: string): Promise<PaginationResult<Book[]>> {
@@ -89,13 +89,14 @@ export class BookPersistenceService {
     return searchFavoriteBooksWithFilters(this.bookRepository, this.formatRepository, filters, limit, offset, userId);
   }
 
-  findBookById(id: string, viewerUserId?: string): Promise<Book> {
+  findBookById(id: string, viewerUserId?: string, ownerId?: string): Promise<Book> {
     return findBookById(
       this.bookRepository,
       this.bookFormatProcessingService,
       id,
       viewerUserId,
       this.favoriteRepository,
+      ownerId,
     );
   }
 
@@ -103,8 +104,8 @@ export class BookPersistenceService {
     return findBookByFileName(this.bookRepository, fileName, includeDeleted);
   }
 
-  findBookByContentHash(hash: string, includeDeleted = false): Promise<Book | null> {
-    return findBookByContentHash(this.bookRepository, hash, includeDeleted);
+  findBookByContentHash(hash: string, includeDeleted = false, ownerId?: string): Promise<Book | null> {
+    return findBookByContentHash(this.bookRepository, hash, includeDeleted, ownerId);
   }
 
   findAllActiveBooks(): Promise<Book[]> {
@@ -225,9 +226,10 @@ export async function findNewArrivals(
   formatRepository: Repository<BookFormatEntity>,
   limit?: number,
   offset?: number,
+  ownerScope?: string,
 ): Promise<PaginationResult<Book[]>> {
   const [bookEntities, total] = await repository.findAndCount({
-    where: { deletedAt: IsNull() },
+    where: { deletedAt: IsNull(), ...(ownerScope ? { uploadedByUserId: ownerScope } : {}) },
     order: { createdAt: 'DESC' },
     take: limit,
     skip: offset,
@@ -345,13 +347,14 @@ export async function findBookById(
   id: string,
   viewerUserId?: string,
   favoriteRepository?: Repository<UserBookFavoriteEntity>,
+  ownerId?: string,
 ): Promise<Book> {
   const bookEntity =
     (await repository.findOne({
       where: { id, deletedAt: IsNull() },
       relations: { formats: true },
     })) ?? null;
-  if (!bookEntity) {
+  if (!bookEntity || (ownerId && bookEntity.uploadedByUserId !== ownerId)) {
     throw new NotFoundException('Book not found');
   }
 
@@ -383,11 +386,15 @@ export async function findBookByContentHash(
   repository: Repository<BookEntity>,
   hash: string,
   includeDeleted = false,
+  ownerId?: string,
 ): Promise<Book | null> {
   const qb = repository
     .createQueryBuilder('book')
     .leftJoinAndSelect('book.formats', 'format')
     .where('(book.file_content_hash = :hash OR format.file_content_hash = :hash)', { hash });
+  if (ownerId) {
+    qb.andWhere('book.uploadedByUserId = :ownerId', { ownerId });
+  }
   if (!includeDeleted) {
     qb.andWhere('book.deletedAt IS NULL');
   }
