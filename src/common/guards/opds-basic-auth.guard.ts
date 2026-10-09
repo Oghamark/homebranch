@@ -1,4 +1,11 @@
-import { CanActivate, ExecutionContext, ForbiddenException, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import {
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { Request } from 'express';
 import { InvalidTokenError, TokenExpiredError } from 'src/modules/auth/auth.exceptions';
 import { HttpAuthGateway } from 'src/modules/auth/http-auth.gateway';
