@@ -1,8 +1,9 @@
-import { CanActivate, ExecutionContext, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import { CanActivate, ExecutionContext, ForbiddenException, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { Request } from 'express';
 import { InvalidTokenError, TokenExpiredError } from 'src/modules/auth/auth.exceptions';
 import { HttpAuthGateway } from 'src/modules/auth/http-auth.gateway';
 import { JwtTokenGateway } from 'src/modules/auth/jwt-token.gateway';
+import { EntitlementService } from 'src/modules/cloud/entitlement.service';
 
 @Injectable()
 export class OpdsBasicAuthGuard implements CanActivate {
@@ -11,6 +12,7 @@ export class OpdsBasicAuthGuard implements CanActivate {
   constructor(
     private readonly authGateway: HttpAuthGateway,
     private readonly tokenGateway: JwtTokenGateway,
+    private readonly entitlements: EntitlementService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -43,9 +45,11 @@ export class OpdsBasicAuthGuard implements CanActivate {
     try {
       const payload = await this.tokenGateway.verifyAccessToken(accessToken);
       request['user'] = { id: payload.userId, email: payload.email, roles: payload.roles };
+      await this.assertSubscribed(payload.userId, payload.roles);
       this.logger.log(`OPDS Basic authentication succeeded (user id: ${payload.userId})`);
       return true;
     } catch (error) {
+      if (error instanceof ForbiddenException) throw error;
       if (error instanceof TokenExpiredError) {
         this.logger.warn('OPDS Basic authentication failed: token expired');
         throw new UnauthorizedException('Token has expired');
@@ -56,6 +60,14 @@ export class OpdsBasicAuthGuard implements CanActivate {
       }
       this.logger.warn('OPDS Basic authentication failed: token verification error');
       throw new UnauthorizedException('Invalid token');
+    }
+  }
+
+  // Hosted service only: suspended, banned or unsubscribed accounts cannot browse or download.
+  private async assertSubscribed(userId: string, roles: string[]): Promise<void> {
+    if (!this.entitlements.cloudMode || roles.includes('ADMIN')) return;
+    if ((await this.entitlements.getState(userId)) === 'blocked') {
+      throw new ForbiddenException('Your subscription is inactive');
     }
   }
 }
