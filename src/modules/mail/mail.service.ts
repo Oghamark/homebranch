@@ -1,5 +1,6 @@
 import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { createTransport } from 'nodemailer';
+import { decryptSecret, encryptSecret } from 'src/common/utils/secret-crypto';
 import { SettingsService } from 'src/modules/settings/settings.service';
 
 export const MAIL_SMTP_SETTING_KEY = 'mail.smtp';
@@ -38,14 +39,16 @@ export class MailService {
       return null;
     }
     try {
-      return JSON.parse(raw) as SmtpConfig;
+      const config = JSON.parse(raw) as SmtpConfig;
+      return { ...config, password: config.password ? decryptSecret(config.password) : undefined };
     } catch {
       return null;
     }
   }
 
   async saveSmtpConfig(config: SmtpConfig): Promise<void> {
-    await this.settingsService.upsert(MAIL_SMTP_SETTING_KEY, JSON.stringify(config));
+    const stored = { ...config, password: config.password ? encryptSecret(config.password) : undefined };
+    await this.settingsService.upsert(MAIL_SMTP_SETTING_KEY, JSON.stringify(stored));
   }
 
   /** The sender address users must approve in their Amazon account. */

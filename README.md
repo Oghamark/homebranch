@@ -37,7 +37,7 @@ It provides a user-friendly interface to organize, search, and read your ebooks 
 - Automatic metadata enrichment from Open Library (genres, publisher, language, ratings, summary, ISBN, page count)
 - Optional Google Books enrichment for series info and any fields Open Library didn't populate
 - Linked format management — merge matching uploads into one book, keep multiple formats attached to the same title, and split or remove individual formats when needed
-- Send to Kindle — users save their Kindle email, and EPUB books are emailed via admin-configured SMTP (`GET/PUT /mail/config`, `PUT /kindle/email`, `POST /books/:id/send-to-kindle`). Add the SMTP sender address to the Amazon Approved Personal Document E-mail List
+- Send to Kindle — users save their Kindle email, and EPUB books are emailed via admin-configured SMTP (`GET/PUT /mail/config`, `PUT /kindle/email`, `POST /books/:id/send-to-kindle`). Add the SMTP sender address to the Amazon Approved Personal Document E-mail List. The SMTP password is stored encrypted (AES-256-GCM) using `SETTINGS_ENCRYPTION_KEY`, falling back to `JWT_ACCESS_SECRET`; keep the key stable or the password must be re-entered
 - Bookshelves (collections) with many-to-many book relationships
 - Favorites and Currently Reading lists
 - Cross-device reading position sync
