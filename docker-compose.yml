@@ -1,0 +1,83 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: homebranch
+      POSTGRES_PASSWORD: $POSTGRES_PASSWORD
+      POSTGRES_DB: homebranch
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  auth-db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: auth
+      POSTGRES_PASSWORD: $POSTGRES_PASSWORD
+      POSTGRES_DB: authentication
+    volumes:
+      - authdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  auth:
+    image: ghcr.io/oghamark/authentication:latest
+    depends_on:
+      - auth-db
+    environment:
+      DATABASE_HOST: auth-db
+      DATABASE_PORT: 5432
+      DATABASE_USERNAME: auth
+      DATABASE_PASSWORD: $POSTGRES_PASSWORD
+      DATABASE_NAME: authentication
+      JWT_ACCESS_SECRET: $JWT_ACCESS_SECRET
+      JWT_REFRESH_SECRET: $JWT_REFRESH_SECRET
+      SESSION_SECRET: $SESSION_SECRET
+      APP_URL: http://localhost
+      CORS_ORIGIN: http://localhost
+      PORT: 3000
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - ./redis-data:/data
+    restart: unless-stopped
+
+  homebranch:
+    image: ghcr.io/oghamark/homebranch:latest
+    depends_on:
+      - db
+      - auth
+      - redis
+    environment:
+      DATABASE_HOST: db
+      DATABASE_PORT: 5432
+      DATABASE_USERNAME: homebranch
+      DATABASE_PASSWORD: $POSTGRES_PASSWORD
+      DATABASE_NAME: homebranch
+      JWT_ACCESS_SECRET: $JWT_ACCESS_SECRET
+      CORS_ORIGIN: http://localhost
+      UPLOADS_DIRECTORY: /data/uploads
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    volumes:
+      - uploads:/data/uploads
+    restart: unless-stopped
+
+  homebranch-web:
+    image: ghcr.io/oghamark/homebranch-web:latest
+    ports:
+      - "80:80"
+    depends_on:
+      - homebranch
+      - auth
+    environment:
+      API_BACKEND: http://homebranch:3000
+      AUTH_BACKEND: http://auth:3000
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  authdata:
+  uploads:

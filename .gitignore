@@ -1,0 +1,13 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Docker volume data
+redis-data/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp

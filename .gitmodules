@@ -1,0 +1,9 @@
+[submodule "homebranch-api"]
+	path = homebranch-api
+	url = git@github.com:Oghamark/homebranch-api.git
+[submodule "homebranch-web"]
+	path = homebranch-web
+	url = git@github.com:Oghamark/homebranch-web.git
+[submodule "Authentication"]
+	path = Authentication
+	url = git@github.com:Oghamark/Authentication.git
