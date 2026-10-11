@@ -104,6 +104,8 @@ services:
     environment:
       VITE_API_ROOT: http://api:3000
       VITE_AUTHENTICATION_ROOT: http://auth:3000
+      VITE_API_URL: /api
+      VITE_AUTHENTICATION_URL: /auth
       ALLOWED_HOST: localhost
       CHOKIDAR_USEPOLLING: "true"
     depends_on:
