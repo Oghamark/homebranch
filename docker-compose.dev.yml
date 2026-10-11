@@ -1,0 +1,127 @@
+name: homebranch-development
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: homebranch
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: homebranch
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U homebranch -d homebranch"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - homebranch-db-data:/var/lib/postgresql/data
+
+  auth-db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: auth
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: authentication
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U auth -d authentication"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - authentication-db-data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - redis-data:/data
+
+  auth:
+    image: node:20-alpine
+    working_dir: /app
+    command: sh -c "npm ci && npm run start:dev"
+    environment:
+      DATABASE_HOST: auth-db
+      DATABASE_PORT: 5432
+      DATABASE_USERNAME: auth
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      DATABASE_NAME: authentication
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?Set JWT_ACCESS_SECRET in .env}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?Set JWT_REFRESH_SECRET in .env}
+      SESSION_SECRET: ${SESSION_SECRET:?Set SESSION_SECRET in .env}
+      APP_URL: http://localhost:3000
+      CORS_ORIGIN: http://localhost:5173
+      CHOKIDAR_USEPOLLING: "true"
+    depends_on:
+      auth-db:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./Authentication:/app
+      - authentication-node-modules:/app/node_modules
+
+  api:
+    image: node:20-alpine
+    working_dir: /app
+    command: sh -c "npm ci && npm run start:dev"
+    environment:
+      DATABASE_HOST: db
+      DATABASE_PORT: 5432
+      DATABASE_USERNAME: homebranch
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      DATABASE_NAME: homebranch
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?Set JWT_ACCESS_SECRET in .env}
+      CORS_ORIGIN: http://localhost:5173
+      APP_URL: http://localhost:8080
+      AUTH_SERVICE_URL: http://auth:3000
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      UPLOADS_DIRECTORY: /data/uploads
+      CHOKIDAR_USEPOLLING: "true"
+    depends_on:
+      db:
+        condition: service_healthy
+      auth:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    ports:
+      - "8080:3000"
+    volumes:
+      - ./homebranch-api:/app
+      - homebranch-api-node-modules:/app/node_modules
+      - uploads:/data/uploads
+
+  web:
+    image: node:20-alpine
+    working_dir: /app
+    command: sh -c "npm ci && npm run dev"
+    environment:
+      VITE_API_ROOT: http://api:3000
+      VITE_AUTHENTICATION_ROOT: http://auth:3000
+      ALLOWED_HOST: localhost
+      CHOKIDAR_USEPOLLING: "true"
+    depends_on:
+      api:
+        condition: service_started
+      auth:
+        condition: service_started
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./homebranch-web:/app
+      - homebranch-web-node-modules:/app/node_modules
+
+volumes:
+  authentication-db-data:
+  authentication-node-modules:
+  homebranch-api-node-modules:
+  homebranch-db-data:
+  homebranch-web-node-modules:
+  redis-data:
+  uploads:
