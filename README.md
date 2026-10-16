@@ -74,6 +74,18 @@ The development stack reloads source changes automatically. The web application 
 
 Use `docker compose -f docker-compose.dev.yml down` to stop the stack. Add `-v` to remove the development database, Redis, uploads, and dependency volumes.
 
+## Authentication service connection
+
+The API requires `AUTH_SERVICE_URL` for social account discovery, recipient
+verification, and OPDS login. Both Compose stacks set it to `http://auth:3000`.
+For a standalone API, set it to the trusted Authentication deployment's internal
+HTTP(S) base URL (for local development, `http://localhost:3000`). Never point it
+at an untrusted service: verified access credentials are forwarded to this URL.
+Use HTTPS unless the connection stays on a trusted private network. Deploy the
+Authentication version supporting `GET /users/social-search` alongside the API;
+an unavailable or incompatible service fails closed rather than accepting unknown
+recipients.
+
 ## OPDS
 
 Homebranch exposes an OPDS catalog for e-readers such as KOReader and Thorium.
