@@ -98,6 +98,19 @@ Homebranch exposes an OPDS catalog for e-readers such as KOReader and Thorium.
 
 Authentication uses HTTP Basic Auth and the companion Authentication service. See the [API repository](https://github.com/Oghamark/homebranch-api) for endpoint behavior and configuration details.
 
+## KOReader sync
+
+The [Homebranch KOReader plugin](koreader-plugin/README.md) pairs a reader through
+your signed-in Homebranch browser and synchronizes private EPUB highlights,
+notes, and reading progress. Book downloads continue to use OPDS. The sync root
+is normally `/api/koreader` behind the web proxy, or `/koreader` on the API itself.
+
+Pairing creates a revocable sync-only device credential, not another Homebranch
+password. The plugin stores that limited credential in KOReader's ordinary
+settings, so treat reader backups as sensitive and revoke lost devices in
+**Settings > KOReader**. Cross-reader percentage jumps are labeled approximate;
+ambiguous annotation anchors are retained as unresolved rather than guessed.
+
 ## Contributing
 
 Contributions are welcome. Read the [contribution guidelines](CONTRIBUTING.md) for the project workflow, development setup, and pull request expectations.

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="id">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:identifier id="id">urn:uuid:6f220e18-1b54-4c83-8896-aa12253bf001</dc:identifier>
+    <dc:title>Homebranch interoperability fixture</dc:title>
+    <dc:language>en</dc:language>
+    <meta property="dcterms:modified">2020-01-01T00:00:00Z</meta>
+  </metadata>
+  <manifest>
+    <item id="one" href="chapter%20one.xhtml" media-type="application/xhtml+xml"/>
+    <item id="two" href="chapter-two.xhtml" media-type="application/xhtml+xml"/>
+  </manifest>
+  <spine><itemref idref="one"/><itemref idref="two"/></spine>
+</package>
