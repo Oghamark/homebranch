@@ -551,6 +551,7 @@ end
 function Homebranch:addToMainMenu(menu)
     menu.homebranch = {
         text = "Homebranch",
+        sorting_hint = "tools",
         sub_item_table = {
             { text = "Sync URL", callback = function() self:configure() end },
             { text = "Pair device", callback = function() self:pair() end },
