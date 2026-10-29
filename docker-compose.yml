@@ -57,6 +57,7 @@ services:
       DATABASE_PASSWORD: $POSTGRES_PASSWORD
       DATABASE_NAME: homebranch
       JWT_ACCESS_SECRET: $JWT_ACCESS_SECRET
+      AUTH_SERVICE_URL: http://auth:3000
       CORS_ORIGIN: http://localhost
       UPLOADS_DIRECTORY: /data/uploads
       REDIS_HOST: redis

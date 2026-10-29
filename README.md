@@ -74,6 +74,18 @@ The development stack reloads source changes automatically. The web application 
 
 Use `docker compose -f docker-compose.dev.yml down` to stop the stack. Add `-v` to remove the development database, Redis, uploads, and dependency volumes.
 
+## Authentication service connection
+
+The API requires `AUTH_SERVICE_URL` for social account discovery, recipient
+verification, and OPDS login. Both Compose stacks set it to `http://auth:3000`.
+For a standalone API, set it to the trusted Authentication deployment's internal
+HTTP(S) base URL (for local development, `http://localhost:3000`). Never point it
+at an untrusted service: verified access credentials are forwarded to this URL.
+Use HTTPS unless the connection stays on a trusted private network. Deploy the
+Authentication version supporting `GET /users/social-search` alongside the API;
+an unavailable or incompatible service fails closed rather than accepting unknown
+recipients.
+
 ## OPDS
 
 Homebranch exposes an OPDS catalog for e-readers such as KOReader and Thorium.
@@ -85,6 +97,19 @@ Homebranch exposes an OPDS catalog for e-readers such as KOReader and Thorium.
 | Authentication document | `/opds/v1/auth` |
 
 Authentication uses HTTP Basic Auth and the companion Authentication service. See the [API repository](https://github.com/Oghamark/homebranch-api) for endpoint behavior and configuration details.
+
+## KOReader sync
+
+The [Homebranch KOReader plugin](koreader-plugin/README.md) pairs a reader through
+your signed-in Homebranch browser and synchronizes private EPUB highlights,
+notes, and reading progress. Book downloads continue to use OPDS. The sync root
+is normally `/api/koreader` behind the web proxy, or `/koreader` on the API itself.
+
+Pairing creates a revocable sync-only device credential, not another Homebranch
+password. The plugin stores that limited credential in KOReader's ordinary
+settings, so treat reader backups as sensitive and revoke lost devices in
+**Settings > KOReader**. Cross-reader percentage jumps are labeled approximate;
+ambiguous annotation anchors are retained as unresolved rather than guessed.
 
 ## Contributing
 
