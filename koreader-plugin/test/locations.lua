@@ -54,13 +54,154 @@ local function prepare(doc, value, missing)
     return prepared
 end
 
+local function passageDocument(positions, large)
+    local doc, value = document(), map()
+    value.capabilities = { passageAnchor = 1 }
+    if large then
+        value.resources = { value.resources[1] }
+        value.chapters = { value.chapters[1] }
+        value.resources[1]["end"], value.chapters[1]["end"] = 70000, 70000
+    end
+    local exact = "A distinctive saved passage."
+    local text = string.rep("x", 1000)
+    for index, offset in ipairs(positions) do
+        local context = "marker-" .. index .. " "
+        text = text:sub(1, offset - #context) .. context .. text:sub(offset + 1)
+        text = text:sub(1, offset) .. exact .. text:sub(offset + #exact + 1)
+    end
+    local searches, exports = 0, 0
+    doc.getNextVisibleChar = function(_, point)
+        if tonumber(point) < #text then return tostring(tonumber(point) + 1) end
+    end
+    doc.getPrevVisibleChar = function(_, point)
+        if tonumber(point) > 0 then return tostring(tonumber(point) - 1) end
+    end
+    doc.getTextFromXPointers = function(_, first, last)
+        exports = exports + 1
+        return text:sub(tonumber(first) + 1, tonumber(last))
+    end
+    doc.getTextFromXPointer = function() error("Passage matching must not export the whole publication.") end
+    doc.getSelectedWordContext = function(_, _, _, first, last)
+        return text:sub(math.max(1, tonumber(first) - 63), tonumber(first)),
+            text:sub(tonumber(last) + 1, tonumber(last) + 64)
+    end
+    doc.findAllText = function(_, pattern)
+        searches = searches + 1
+        local hits, offset = {}, 1
+        while true do
+            local at = text:find(pattern, offset, true)
+            if not at then return hits end
+            hits[#hits + 1] = { start = tostring(at - 1), ["end"] = tostring(at + #pattern - 1) }
+            offset = at + 1
+        end
+    end
+    local real = dofile(root .. "anchors.lua")
+    local prepared = assert(Locations.prepare(doc, value, {
+        normalize = real.normalize,
+        resolve = function(source, anchor, options)
+            if tonumber(anchor.exact) then return { pos0 = anchor.exact } end
+            return real.resolve(source, anchor, options)
+        end,
+    }))
+    assert(Locations.resolve(doc, prepared, "253"))
+    local location = assert(Locations.capture(doc, prepared, "253"))
+    location.passage = { version = 1, exact = exact }
+    return doc, prepared, location, function() return searches, exports end
+end
+
+test("passage candidates and duplicate proof stay inside the chapter/resource intersection", function()
+    local doc, prepared, location, calls = passageDocument({ 253, 650 })
+    assert(Locations.resolve(doc, prepared, nil, location))
+    local target = assert(Locations.target(doc, prepared, location))
+    assert(target.passage and target.point == "253" and target.chapter)
+    local searches, exports = calls()
+    assert(Locations.resolve(doc, prepared, nil, location))
+    assert(Locations.capture(doc, prepared, "253").passage)
+    local cached_searches, cached_exports = calls()
+    assert(cached_searches == searches and cached_exports == exports,
+        "Page capture and repeated resolution must use the existing bounded caches.")
+end)
+
+test("ambiguous or missing passages retain an explicitly approximate chapter fallback", function()
+    for _, positions in ipairs({ { 253, 353 }, { 650 } }) do
+        local doc, prepared, location = passageDocument(positions)
+        assert(Locations.resolve(doc, prepared, nil, location))
+        local target = assert(Locations.target(doc, prepared, location))
+        assert(not target.passage and target.chapter and target.label:find("Passage could not be verified", 1, true))
+    end
+end)
+
+test("bounded context disambiguates repeated passages within the verified scope", function()
+    local doc, prepared, location = passageDocument({ 253, 353 })
+    location.passage.prefix = "marker-1"
+    assert(Locations.resolve(doc, prepared, nil, location))
+    local target = assert(Locations.target(doc, prepared, location))
+    assert(target.passage and target.point == "253")
+end)
+
+test("over-limit scopes and truncated native candidates cannot claim passage precision", function()
+    local doc, prepared, location, calls = passageDocument({ 253 }, true)
+    assert(Locations.resolve(doc, prepared, nil, location))
+    assert(not Locations.target(doc, prepared, location).passage)
+    assert(calls() == 0 and prepared.warning:find("safe text limit", 1, true))
+    doc, prepared, location = passageDocument({ 253 })
+    doc.findAllText = function()
+        local hits = {}
+        for index = 1, 257 do hits[index] = { start = "253", ["end"] = "280" } end
+        return hits
+    end
+    assert(Locations.resolve(doc, prepared, nil, location))
+    assert(not Locations.target(doc, prepared, location).passage)
+    assert(prepared.warning:find("Too many", 1, true))
+end)
+
+test("a resumed request cannot reuse a different passage in the same chapter", function()
+    local doc, prepared, location = passageDocument({ 253 })
+    local clock = 0
+    local function now() clock = clock + 0.001; return clock end
+    assert(not Locations.resolve(doc, prepared, nil, location, { now = now, budget = 0.008 }))
+    assert(prepared.pending_resolution)
+    local changed = {}
+    for key, value in pairs(location) do changed[key] = value end
+    changed.passage = { version = 1, exact = "A different missing passage." }
+    assert(Locations.resolve(doc, prepared, nil, changed))
+    assert(not Locations.target(doc, prepared, changed).passage)
+    assert(Locations.resolve(doc, prepared, nil, location))
+    assert(Locations.target(doc, prepared, location).passage)
+end)
+
+test("invalid passage limits and unrelated chapter scopes never become verified jumps", function()
+    local doc, prepared, location = passageDocument({ 253 })
+    location.chapterId = "Other/one.xhtml#last"
+    assert(Locations.resolve(doc, prepared, nil, location))
+    assert(not Locations.target(doc, prepared, location))
+    location.chapterId = "Text/one.xhtml#second"
+    for _, exact in ipairs({ string.rep("a", 257), "control\0text", "short" }) do
+        location.passage = { version = 1, exact = exact }
+        assert(not Locations.target(doc, prepared, location))
+    end
+end)
+
 test("chapter identity follows native boundaries across resources, not total percentage", function()
     local doc = document()
-    local value = Locations.capture(doc, prepare(doc, map()), "600")
+    local prepared = prepare(doc, map())
+    assert(prepared.has_chapters)
+    local value = Locations.capture(doc, prepared, "600")
     assert(value.href == "Other/one.xhtml")
     assert(value.chapterId == "Text/one.xhtml#second")
     assert(math.abs(value.chapterProgression - 2 / 3) < 0.00001)
     assert(value.resourceProgression == 0.2 and value.basis == "rendered")
+end)
+
+test("failed boundary verification retains a text-free reason for approximate fallback", function()
+    local doc = document()
+    local prepared = assert(Locations.prepare(doc, map(), {
+        resolve = function() return nil, "Passage is ambiguous." end,
+    }))
+    assert(Locations.resolve(doc, prepared, "600"))
+    assert(prepared.resolved_point == "600" and not prepared.pending_resolution)
+    assert(prepared.warning:find("Passage is ambiguous", 1, true))
+    assert(Locations.capture(doc, prepared, "600") == nil)
 end)
 
 test("two sections in the same resource remain distinct despite duplicate titles", function()

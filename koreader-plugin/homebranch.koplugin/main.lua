@@ -375,21 +375,33 @@ function Homebranch:offerProgress(progress)
     local target, location_warning
     if not exact and location then
         target, location_warning = self.locations.target(self.ui.document, self.location_bounds, location)
+        if self.location_bounds and self.location_bounds.pending_resolution
+            and self.locations.compatible(self.location_bounds, location)
+            and (not target or (location.chapterId and not target.chapter)
+                or (location.passage and not target.passage)) then
+            return self:deferLocationSync()
+        end
     end
     local destination = target and target.label or string.format("%s%.1f%% of the book",
         exact and "" or "approximately ", progress.percentage * 100)
     if location_warning then destination = destination .. "\nChapter could not be verified; using whole-book approximation." end
     UIManager:show(ConfirmBox:new {
         text = string.format("Jump to %s from %s?", destination, progress.device or "another reader"),
-        ok_text = exact and "Jump" or "Jump approximately",
+        ok_text = (exact or (target and target.passage)) and "Jump" or "Jump approximately",
         ok_callback = function()
             if epoch ~= self.epoch or self.current_state ~= state then return end
             local jump_target = target
+            if target and self.location_bounds and self.location_bounds.cache
+                and self.location_bounds.cache.domVersion ~= self.ui.doc_settings:readSetting("cre_dom_version") then
+                self:notice("Homebranch: The reader's DOM version changed. Sync again before applying this position.")
+                return
+            end
             if target then
                 local reason
                 jump_target, reason = self.locations.target(self.ui.document, self.location_bounds, location)
-                if not jump_target then
-                    self:notice("Homebranch: " .. reason .. " No chapter jump was applied; sync again to review the destination.")
+                if not jump_target or (target.passage and not jump_target.passage) then
+                    self:notice("Homebranch: " .. (reason or "The saved passage is no longer verified.")
+                        .. " No jump was applied; sync again to review the destination.")
                     return
                 end
             end
@@ -405,6 +417,7 @@ function Homebranch:offerProgress(progress)
             self.applying = false
             state.lastProgress = self.ui.rolling:getLastProgress()
             state.pendingProgress = nil
+            state.pendingProgressDraft = nil
             state.seenProgress = progress.revision
             self:save()
         end,
@@ -412,10 +425,25 @@ function Homebranch:offerProgress(progress)
             if epoch ~= self.epoch or self.current_state ~= state then return end
             state.seenProgress = progress.revision
             state.lastProgress = nil
-            state.pendingProgress = self:progressOperation()
+            self:queueProgress()
             self:save()
         end,
     })
+end
+
+function Homebranch:queueProgress()
+    local state = self.current_state
+    state.pendingProgress = self:progressOperation()
+    state.pendingProgressDraft = { mutationId = state.pendingProgress.mutationId,
+        domVersion = self.ui.doc_settings:readSetting("cre_dom_version") }
+end
+
+function Homebranch:deferLocationSync()
+    if self.settings.auto_sync then
+        UIManager:unschedule(self.run_task)
+        UIManager:scheduleIn(1, self.run_task)
+    end
+    return false
 end
 
 function Homebranch:progressOperation()
@@ -471,7 +499,7 @@ function Homebranch:resolveLocations(remote, interactive)
             "Homebranch operation cancelled because the document or account changed.")
     end
     local last_yield = socket.gettime()
-    local ok, warning = self.locations.resolve(document, bounds, self.ui.rolling:getLastProgress(),
+    local _, warning = self.locations.resolve(document, bounds, self.ui.rolling:getLastProgress(),
         type(remote) == "table" and remote.revision ~= state.seenProgress and remote.location or nil, {
             budget = interactive and 2 or 0.5,
             checkpoint = function()
@@ -494,11 +522,44 @@ function Homebranch:resolveLocations(remote, interactive)
     owned()
     state.locationCache = bounds.cache
     self:save()
-    if not ok then logger.warn("Homebranch: " .. warning) end
+    if warning then logger.warn("Homebranch: " .. warning) end
 end
 
 function Homebranch:pushProgress(state)
     local operation = state.pendingProgress
+    local draft = state.pendingProgressDraft
+    -- Older or possibly attempted operations retain their original payload and ID.
+    if type(draft) == "table" and draft.mutationId == operation.mutationId then
+        if operation.progress == self.ui.rolling:getLastProgress()
+            and draft.domVersion == self.ui.doc_settings:readSetting("cre_dom_version") then
+            local fresh = self:progressOperation()
+            local bounds = self.location_bounds
+            local function quality(location)
+                return location and (location.passage and 3 or location.chapterId and 2 or 1) or 0
+            end
+            local compatible = self.locations.compatible(bounds, operation.location)
+            local available = math.max(compatible and quality(operation.location) or 0, quality(fresh.location))
+            local wanted = bounds and bounds.map.capabilities and bounds.map.capabilities.passageAnchor == 1
+                and 3 or (bounds and bounds.has_chapters and 2 or 1)
+            if bounds and available < wanted
+                and (bounds.pending_resolution or bounds.resolved_point ~= operation.progress) then
+                return self:deferLocationSync()
+            end
+            if quality(fresh.location) > quality(operation.location)
+                or (bounds and operation.location and not compatible) then
+                local enriched = {}
+                for key, value in pairs(operation) do enriched[key] = value end
+                enriched.mutationId, enriched.location = fresh.mutationId, fresh.location
+                operation, state.pendingProgress = enriched, enriched
+            end
+        end
+        state.pendingProgressDraft = nil
+        local saved, err = pcall(self.checkpointProgress, self, state, operation)
+        if not saved then
+            state.pendingProgressDraft = { mutationId = operation.mutationId, domVersion = draft.domVersion }
+            error(err, 0)
+        end
+    end
     self:request("PUT", "/syncs/progress", operation)
     local accepted = self:request("GET", "/books/" .. state.bookId .. "/progress")
     if type(accepted) == "table" and accepted.nativeProgress == operation.progress then
@@ -507,8 +568,23 @@ function Homebranch:pushProgress(state)
     state.lastProgress = operation.progress
     if state.pendingProgress and state.pendingProgress.mutationId == operation.mutationId then
         state.pendingProgress = nil
+        state.pendingProgressDraft = nil
     end
     self:save()
+    return true
+end
+
+function Homebranch:checkpointProgress(state, operation)
+    self:save()
+    if not self.store.file then return end
+    -- LuaSettings.flush does not report write failures, so verify the attempted-state checkpoint.
+    local settings = LuaSettings:open(self.store.file):readSetting("settings")
+    local account = settings and settings.account
+    local persisted = account and account.documents and account.documents[state.documentKey]
+    assert(account and account.username == self.settings.account.username and persisted
+        and persisted.pendingProgress and persisted.pendingProgress.mutationId == operation.mutationId
+        and persisted.pendingProgressDraft == nil,
+        "Could not checkpoint reading progress. No position was uploaded; pending work was retained.")
 end
 
 function Homebranch:documentState(digest)
@@ -544,20 +620,23 @@ function Homebranch:sync(interactive)
     self:resolveLocations(remote, interactive)
     self:syncAnnotations()
     -- Do not overwrite an unseen remote position just because the book opened.
+    local deferred = false
     if type(remote) == "table" and remote.revision ~= state.seenProgress then
-        self:offerProgress(remote)
+        deferred = self:offerProgress(remote) == false
     elseif state.pendingProgress then
-        self:pushProgress(state)
+        deferred = self:pushProgress(state) == false
     elseif interactive and (type(remote) ~= "table" or not remote.percentage) then
-        state.pendingProgress = self:progressOperation()
+        self:queueProgress()
         self:save()
-        self:pushProgress(state)
+        deferred = self:pushProgress(state) == false
     end
     if interactive then
         local count = 0
         for _ in pairs(state.unresolved) do count = count + 1 end
-        local message = count > 0 and ("Homebranch synchronized. " .. count
-            .. " annotation(s) unresolved. See Homebranch > Unresolved annotations.") or "Homebranch synchronized."
+        local message = deferred and ("Homebranch synchronized annotations. Reading-position sync is waiting"
+            .. " for chapter mapping; pending work was retained. Sync again to continue.") or "Homebranch synchronized."
+        if count > 0 then message = message .. " " .. count
+            .. " annotation(s) unresolved. See Homebranch > Unresolved annotations." end
         if self.excluded_annotations and self.excluded_annotations > 0 then
             message = message .. "\n\n" .. self.excluded_annotations
                 .. " local annotation(s) from another pairing or edition were not uploaded."
@@ -612,7 +691,7 @@ function Homebranch:onPageUpdate()
     local state = self.current_state
     local progress = self.ui.rolling:getLastProgress()
     if state.lastProgress ~= progress then
-        state.pendingProgress = self:progressOperation()
+        self:queueProgress()
         self:save()
         if self.settings.auto_sync then UIManager:unschedule(self.run_task); UIManager:scheduleIn(10, self.run_task) end
     end
