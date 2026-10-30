@@ -71,6 +71,238 @@ local function test(name, run)
     print("ok " .. count .. " - " .. name)
 end
 
+local function progressSync(plugin)
+    local uploaded, remote = {}, nil
+    plugin.current_state.bookId = "book"
+    plugin.link_verified = true
+    plugin.syncAnnotations = function() end
+    plugin.transport.request = function(_, method, _, body)
+        if method == "PUT" then
+            assert(plugin.current_state.pendingProgressDraft == nil)
+            uploaded[#uploaded + 1] = body
+            remote = { percentage = body.percentage, nativeProgress = body.progress, revision = "accepted" }
+        end
+        return { body = remote }
+    end
+    return uploaded
+end
+local function mappedLocation(plugin)
+    plugin.location_bounds = { cache = { domVersion = "digest" }, map = {}, has_chapters = true }
+    plugin.locations.compatible = function(_, location) return type(location) == "table" end
+    plugin.locations.capture = function(_, bounds, point)
+        if bounds.resolved_point == point then
+            return { chapterId = "chapter-two", chapterProgression = 0.4 }
+        end
+    end
+end
+
+test("first sync enriches a never-attempted page-turn snapshot after chapter mapping", function()
+    local plugin, move = instance()
+    local uploaded = progressSync(plugin)
+    mappedLocation(plugin)
+    local mappings = 0
+    plugin.locations.resolve = function(_, bounds, point)
+        mappings = mappings + 1
+        bounds.resolved_point = point
+        return true
+    end
+    move("cold-pointer", 0.6)
+    plugin:onPageUpdate()
+    local original = plugin.current_state.pendingProgress
+    assert(mappings == 0 and original.location == nil)
+    plugin:sync(false)
+    assert(mappings == 1 and #uploaded == 1)
+    assert(uploaded[1].progress == "cold-pointer" and uploaded[1].percentage == 0.6)
+    assert(uploaded[1].location.chapterId == "chapter-two")
+    assert(uploaded[1].mutationId ~= original.mutationId and original.location == nil)
+end)
+test("passage-capable drafts wait for extraction and receive a new immutable operation", function()
+    local plugin, move = instance()
+    local uploaded = progressSync(plugin)
+    mappedLocation(plugin)
+    plugin.location_bounds.map.capabilities = { passageAnchor = 1 }
+    local ready = false
+    plugin.locations.capture = function(_, bounds, point)
+        if bounds.resolved_point == point then
+            return { chapterId = "chapter-two", passage = ready and { version = 1, exact = "A verified passage." } or nil }
+        end
+    end
+    plugin.locations.resolve = function(_, bounds, point)
+        bounds.resolved_point = point
+        bounds.pending_resolution = not ready and {} or nil
+        return ready
+    end
+    move("cold-pointer", 0.6)
+    plugin:onPageUpdate()
+    local original = plugin.current_state.pendingProgress
+    plugin:sync(false)
+    assert(#uploaded == 0 and plugin.current_state.pendingProgress == original)
+    ready = true
+    plugin:sync(false)
+    assert(#uploaded == 1 and uploaded[1].location.passage.exact == "A verified passage.")
+    assert(uploaded[1].mutationId ~= original.mutationId and original.location == nil)
+end)
+test("paused mapping retains an unsent snapshot and resumes before its first upload", function()
+    local plugin, move = instance()
+    local uploaded = progressSync(plugin)
+    mappedLocation(plugin)
+    local passes = 0
+    plugin.locations.resolve = function(_, bounds, point)
+        passes = passes + 1
+        if passes == 1 then bounds.pending_resolution = {}; return false, "Paused" end
+        bounds.pending_resolution, bounds.resolved_point = nil, point
+        return true
+    end
+    move("cold-pointer", 0.6)
+    plugin:onPageUpdate()
+    local original = plugin.current_state.pendingProgress
+    scheduled = {}
+    plugin:sync(false)
+    assert(#uploaded == 0 and plugin.current_state.pendingProgress == original)
+    assert(plugin.current_state.pendingProgressDraft.mutationId == original.mutationId)
+    assert(#scheduled == 1 and scheduled[1][1] == 1)
+    plugin:sync(false)
+    assert(#uploaded == 1 and uploaded[1].location.chapterId == "chapter-two")
+end)
+test("an ambiguous upload is retried unchanged even when chapter mapping becomes available", function()
+    local plugin, move = instance()
+    plugin.current_state.bookId = "book"
+    move("cold-pointer", 0.6)
+    plugin:onPageUpdate()
+    local original = plugin.current_state.pendingProgress
+    plugin.transport.request = function()
+        assert(plugin.current_state.pendingProgressDraft == nil)
+        return { error = "Interrupted after server acceptance" }
+    end
+    assert(not pcall(function() plugin:pushProgress(plugin.current_state) end))
+    assert(plugin.current_state.pendingProgress == original and original.location == nil)
+    mappedLocation(plugin)
+    plugin.locations.capture = function() error("Attempted payloads must not be recaptured.") end
+    plugin.transport.request = function(_, method, _, body)
+        if method == "PUT" then assert(body == original and body.location == nil) end
+        return { body = { nativeProgress = original.progress, revision = "accepted" } }
+    end
+    plugin:pushProgress(plugin.current_state)
+    assert(plugin.current_state.pendingProgress == nil)
+end)
+test("movement during mapping is resolved before uploading the newer page-turn snapshot", function()
+    local plugin, move = instance()
+    local uploaded = progressSync(plugin)
+    mappedLocation(plugin)
+    local passes = 0
+    plugin.locations.resolve = function(_, bounds, point)
+        passes = passes + 1
+        bounds.resolved_point = point
+        if passes == 1 then move("newer-pointer", 0.9); plugin:onPageUpdate() end
+        return true
+    end
+    move("cold-pointer", 0.6)
+    plugin:onPageUpdate()
+    local original = plugin.current_state.pendingProgress
+    plugin:sync(false)
+    assert(#uploaded == 0 and plugin.current_state.pendingProgress.progress == "newer-pointer")
+    plugin:sync(false)
+    assert(#uploaded == 1 and uploaded[1].progress == "newer-pointer" and uploaded[1].percentage == 0.9)
+    assert(uploaded[1].location.chapterId == "chapter-two" and original.location == nil)
+end)
+test("incoming chapter jumps wait for paused mapping instead of offering a premature whole-book fallback", function()
+    local plugin = instance()
+    mappedLocation(plugin)
+    plugin.current_state.bookId, plugin.link_verified = "book", true
+    plugin.syncAnnotations = function() end
+    local ready = false
+    plugin.locations.resolve = function(_, bounds)
+        bounds.pending_resolution = not ready and {} or nil
+        return ready, ready and nil or "Paused"
+    end
+    plugin.locations.target = function()
+        if ready then return { point = "chapter-pointer", chapter = true, label = "Chapter two, approximately 40% through chapter" } end
+        return nil, "Chapter mapping is pending."
+    end
+    plugin.transport.request = function(_, method)
+        assert(method == "GET")
+        return { body = { percentage = 0.6, source = "web", revision = "incoming",
+            location = { chapterId = "chapter-two" }, device = "Browser" } }
+    end
+    local before = #dialogs
+    plugin:sync(false)
+    assert(#dialogs == before and plugin.current_state.seenProgress ~= "incoming")
+    ready = true
+    plugin:sync(false)
+    assert(dialogs[#dialogs].text:find("Chapter two") and dialogs[#dialogs].text:find("through chapter"))
+    dialogs[#dialogs].ok_callback()
+    plugin:onPageUpdate()
+    assert(plugin.current_state.pendingProgress == nil and plugin.current_state.pendingProgressDraft == nil)
+    assert(plugin.current_state.seenProgress == "incoming")
+end)
+test("verified passage confirmation cannot silently downgrade after its cache changes", function()
+    local plugin = instance()
+    mappedLocation(plugin)
+    plugin.locations.target = function()
+        return { point = "passage-pointer", passage = true, chapter = true, label = "Verified saved passage" }
+    end
+    plugin:offerProgress({ percentage = 0.6, source = "web", revision = "incoming",
+        location = { chapterId = "chapter-two", passage = { version = 1, exact = "A verified passage." } } })
+    local prompt = dialogs[#dialogs]
+    assert(prompt.ok_text == "Jump" and prompt.text:find("Verified saved passage", 1, true))
+    plugin.locations.target = function()
+        return { point = "approximate-pointer", chapter = true, label = "An approximate chapter target" }
+    end
+    prompt.ok_callback()
+    assert(plugin.ui.rolling:getLastProgress() == "start" and plugin.current_state.seenProgress ~= "incoming")
+    assert(dialogs[#dialogs].text:find("No jump was applied", 1, true))
+end)
+test("a failed attempted-state checkpoint prevents upload and leaves the draft safely retryable", function()
+    local plugin, move = instance()
+    local uploaded = progressSync(plugin)
+    mappedLocation(plugin)
+    move("cold-pointer", 0.6)
+    plugin:onPageUpdate()
+    plugin.location_bounds.resolved_point = "cold-pointer"
+    local flush = plugin.store.flush
+    plugin.store.flush = function() error("Disk unavailable") end
+    assert(not pcall(function() plugin:pushProgress(plugin.current_state) end))
+    assert(#uploaded == 0)
+    assert(plugin.current_state.pendingProgressDraft.mutationId == plugin.current_state.pendingProgress.mutationId)
+    plugin.store.flush = flush
+    plugin:pushProgress(plugin.current_state)
+    assert(#uploaded == 1 and uploaded[1].location.chapterId == "chapter-two")
+end)
+test("a silent settings write failure cannot leave an attempted operation marked as an unsent draft", function()
+    local plugin, move = instance()
+    local uploaded = progressSync(plugin)
+    mappedLocation(plugin)
+    move("cold-pointer", 0.6)
+    plugin:onPageUpdate()
+    local state = plugin.current_state
+    local persisted = { account = { username = plugin.settings.account.username, documents = {
+        [state.documentKey] = { pendingProgress = state.pendingProgress, pendingProgressDraft = state.pendingProgressDraft },
+    } } }
+    plugin.store.file = "/not-written/homebranch.lua"
+    local settings = package.loaded["luasettings"]
+    local open = settings.open
+    settings.open = function()
+        return { readSetting = function() return persisted end }
+    end
+    plugin.location_bounds.resolved_point = "cold-pointer"
+    local ok, err = pcall(function() plugin:pushProgress(state) end)
+    settings.open = open
+    assert(not ok and err:find("Could not checkpoint") and #uploaded == 0)
+    assert(state.pendingProgressDraft.mutationId == state.pendingProgress.mutationId)
+end)
+test("a DOM change cannot attach new chapter coordinates to an older native snapshot", function()
+    local plugin, move = instance()
+    progressSync(plugin)
+    move("cold-pointer", 0.6)
+    plugin:onPageUpdate()
+    local original = plugin.current_state.pendingProgress
+    mappedLocation(plugin)
+    plugin.ui.doc_settings.readSetting = function() return 20260101 end
+    plugin.locations.capture = function() error("Do not recapture a snapshot from another DOM.") end
+    plugin:pushProgress(plugin.current_state)
+    assert(original.location == nil and plugin.current_state.pendingProgress == nil)
+end)
+
 test("initial sync reads remote before publishing and does not echo remote jumps", function()
     local plugin = instance()
     local requests = {}
@@ -119,6 +351,13 @@ test("new maps do not retrofit portable fields into an already queued operation"
     plugin:loadLocationMap { bookId = "book", formatId = "format", capabilities = { portableLocation = 1 } }
     assert(plugin.current_state.pendingProgress == operation and operation.location == nil)
     assert(operation.mutationId == "queued-before-upgrade")
+    plugin.current_state.bookId = "book"
+    plugin.locations.capture = function() error("Pre-upgrade operations must not be recaptured.") end
+    plugin.transport.request = function(_, method, _, body)
+        if method == "PUT" then assert(body == operation and body.location == nil) end
+        return { body = { nativeProgress = operation.progress, revision = "accepted" } }
+    end
+    plugin:pushProgress(plugin.current_state)
 end)
 test("new reading changes capture portable coordinates after map verification", function()
     local plugin, move = instance()
@@ -208,12 +447,14 @@ test("a new local position during upload is not discarded by an older acknowledg
     plugin.transport.request = function(_, method)
         if method == "PUT" then
             state.pendingProgress = { mutationId = "second", progress = "b" }
+            state.pendingProgressDraft = { mutationId = "second" }
             return { body = {} }
         end
         return { body = { revision = "3", nativeProgress = "a" } }
     end
     plugin:pushProgress(state)
     assert(state.pendingProgress.mutationId == "second")
+    assert(state.pendingProgressDraft.mutationId == "second")
 end)
 test("account changes cancel in-flight response application", function()
     local plugin = instance()

@@ -45,6 +45,7 @@ TLS verification checks both the server certificate chain and its subject altern
 
 - **Automatic sync** runs on reading/annotation activity and network reconnection with bounded retries. **Sync now** also captures note edits that do not emit a KOReader mutation event.
 - Queued changes and acknowledgements are persisted. An interrupted upload retries the same mutation ID. An accepted retry is not a new edit.
+- Page turns record cache-only progress snapshots. A snapshot explicitly known never to have been attempted can be replaced with a new operation ID once its verified chapter coordinates are ready, without changing its native point or percentage. Attempted operations and pre-upgrade queues are never enriched or rewritten. The attempted-state checkpoint is verified before a new operation is sent.
 - Remote pages are journaled before sidecar updates. After an interrupted checkpoint, replay finishes before local diffing so partially installed highlights are not mistaken for new edits or deletions.
 - Conflicts use the latest server-accepted mutation, not the reader's clock or the furthest reading percentage. An explicit delete propagates; a later newly accepted edit can restore an annotation.
 - On opening a book, a previously unseen remote reading position is offered before a local position is uploaded. A compatible native pointer is preferred. With chapter-aware API support, web-to-KOReader jumps use a verified table-of-contents section and progress within that section, rather than deriving a chapter from whole-book percentage.
@@ -52,6 +53,8 @@ TLS verification checks both the server certificate chain and its subject altern
 - Chapter jumps select a verified in-section native pointer, not a whole-book page percentage. A paginated page can also display preceding-section text; the selected logical reading point still belongs to the requested chapter. Applying a remote jump does not automatically overwrite its source coordinate.
 - Missing, ambiguous, or stale chapter boundaries use an explicitly labeled resource or whole-book approximation. Boundary matching has a bounded work budget; a large or unsupported publication can retain fallback behavior rather than guessing a chapter. Old servers without the chapter-location capability continue using the legacy progress protocol.
 - Chapter mapping resolves only the current or incoming section and its needed boundaries, with cooperative UI checkpoints. Automatic sync gives mapping a 0.5-second wall-time budget; **Sync now** allows 2 seconds. Budget checks occur between native calls and bounded HTML parsing steps, not inside them. Unfinished scans resume on later syncs instead of starting over. Verified native boundaries are cached per edition, chapter map, and reader DOM version; rendered positions are recalculated after layout changes. Page turns only consult the cache and never start a chapter search.
+- While mapping is merely paused, a new unsent position or incoming chapter jump waits instead of immediately becoming a whole-book approximation. Automatic sync schedules another bounded pass; with automatic sync disabled, use **Sync now** again. Genuine verification failures still allow labeled fallback and report the boundary failure reason without including book text.
+- Accepted linked plugin progress adds the book to Homebranch's **Continue reading** collection, including books never opened in the browser. Resetting reading position clears the browser/shared resume state, not the reader's local position or raw native history. Old accepted retries cannot restore the entry; newly accepted reading progress can.
 - Exact matching uses the verified EPUB plus the original native text range or literal quoted text. Repeated text must be disambiguated by context. The plugin never uses fuzzy matching or guesses a range.
 - Unresolved annotations retain their quote and note under **Unresolved annotations** and in Homebranch. They are retried on later syncs and are not silently deleted.
 - Only EPUB text highlights and associated notes are supported. PDF coordinates, standalone page bookmarks, PDF/audio progress bridging, and shared/public annotations are outside this integration.
@@ -74,6 +77,22 @@ position. See the [portable EPUB location contract](../homebranch-api/docs/epub-
 for the map identity, measurement basis, and compatibility rules. Font size and
 screen size change approximate page counts; those counts are never stored as
 universal page numbers.
+
+With a passage-capable API, new progress also carries a short excerpt and bounded
+context. Cross-reader restoration prefers a literal, uniquely verified passage
+inside the verified resource/chapter over percentage interpolation. The prompt
+distinguishes a verified passage from an approximate jump. This preserves a
+reading passage, not an identical page or screen position.
+
+Extraction and matching run in the cooperative sync worker. Page turns only use
+cached excerpts; they do not search or export HTML. Passage scope is limited to
+65,536 text units, 256 KiB of HTML and 2,048 opening tags, with one incoming match
+and one outgoing excerpt cached. Native candidate searches are still globally
+scoped by crengine's API, capped and filtered before bounded in-scope duplicate
+and context checks. Common prefixes, ambiguous text, unsupported extraction and
+over-limit scopes keep the labeled percentage fallback. There is no full-book
+character index. Deploy the API first; older maps omit passage support, and
+already attempted queued operations keep their original payload and ID.
 
 The web/API deployment must publish the sync root under any reverse-proxy prefix, including all device-pairing and annotation extension routes. No extra Docker service or separate public KOSync account registration is required.
 
@@ -113,6 +132,13 @@ For a synthetic book with at least 90 sections and its API-generated map, add
 checkpoints, eventual section resolution, and cache reuse across layouts. This
 mode reports total mapping time and the longest uninterrupted native slice; it
 does not substitute for checking an actual e-reader.
+For the shared chapter fixture, `--passages /temporary/native-passages.json`
+exports native excerpts. The web's `scripts/portable-reader-proof.mjs` accepts
+that path through `NATIVE_PASSAGE_SAMPLES` and can export actual browser
+captures through `WEB_PASSAGE_SAMPLES`. Pass those browser captures to this
+native driver with `--web-passages /temporary/browser-passages.json` to check
+the reverse direction in both native layouts. These files contain only the
+original synthetic fixture text, not reader settings or credentials.
 `test/locations-live-api.lua` is a second driver for the native acceptance harness;
 it checks chapter-aware native/browser progress, replay ordering, legacy writes,
 and revocation over verified HTTPS.

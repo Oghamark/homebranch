@@ -49,7 +49,7 @@ function Anchors.resolve(document, anchor, options)
     local token = anchor.exact:match("^%s*(%S+)")
     local exact = Anchors.normalize(anchor.exact)
     local prefix = options and options.batch and options.prefix_search ~= false
-        and exact:match("^(%S+%s+%S+)")
+        and (options.search_prefix or exact:match("^(%S+%s+%S+)"))
     if prefix and #prefix > 64 then prefix = nil end
     local function first_token()
         local fallback = {}
