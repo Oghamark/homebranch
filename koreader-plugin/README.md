@@ -47,7 +47,10 @@ TLS verification checks both the server certificate chain and its subject altern
 - Queued changes and acknowledgements are persisted. An interrupted upload retries the same mutation ID. An accepted retry is not a new edit.
 - Remote pages are journaled before sidecar updates. After an interrupted checkpoint, replay finishes before local diffing so partially installed highlights are not mistaken for new edits or deletions.
 - Conflicts use the latest server-accepted mutation, not the reader's clock or the furthest reading percentage. An explicit delete propagates; a later newly accepted edit can restore an annotation.
-- On opening a book, a previously unseen remote reading position is offered before a local position is uploaded. Jumps from the web reader are explicitly labeled **approximate** unless a usable native pointer is available.
+- On opening a book, a previously unseen remote reading position is offered before a local position is uploaded. A compatible native pointer is preferred. With chapter-aware API support, web-to-KOReader jumps use a verified table-of-contents section and progress within that section, rather than deriving a chapter from whole-book percentage.
+- Chapter identity and passage precision are separate: the section can be exact while placement within it remains **approximate**. Multiple sections can share a resource, and a section can span resources. Repeated titles are not identifiers. The dialog shows the section and its percentage, with an approximate chapter page for the current device when calculable.
+- Chapter jumps select a verified in-section native pointer, not a whole-book page percentage. A paginated page can also display preceding-section text; the selected logical reading point still belongs to the requested chapter. Applying a remote jump does not automatically overwrite its source coordinate.
+- Missing, ambiguous, or stale chapter boundaries use an explicitly labeled resource or whole-book approximation. Boundary matching has a bounded work budget; a large or unsupported publication can retain fallback behavior rather than guessing a chapter. Old servers without the chapter-location capability continue using the legacy progress protocol.
 - Exact matching uses the verified EPUB plus the original native text range or literal quoted text. Repeated text must be disambiguated by context. The plugin never uses fuzzy matching or guesses a range.
 - Unresolved annotations retain their quote and note under **Unresolved annotations** and in Homebranch. They are retried on later syncs and are not silently deleted.
 - Only EPUB text highlights and associated notes are supported. PDF coordinates, standalone page bookmarks, PDF/audio progress bridging, and shared/public annotations are outside this integration.
@@ -62,6 +65,15 @@ To keep search bounded on e-readers, resolution stops at 257 initial-token hits 
 
 Pending queues and cursors are per paired account and EPUB identity. Tombstones are not inferred from a missing page of remote results. Replacing an EPUB with a different edition requires a newly verified identity rather than reusing old positions.
 
+Chapter-aware locations are an additive extension. Upgrade the API and apply its
+registered migrations before updating clients. Existing native positions,
+serialized web positions, and already queued operation IDs remain usable.
+Upgrading does not retrofit a guessed chapter into an old percentage-only
+position. See the [portable EPUB location contract](../homebranch-api/docs/epub-portable-location.md)
+for the map identity, measurement basis, and compatibility rules. Font size and
+screen size change approximate page counts; those counts are never stored as
+universal page numbers.
+
 The web/API deployment must publish the sync root under any reverse-proxy prefix, including all device-pairing and annotation extension routes. No extra Docker service or separate public KOSync account registration is required.
 
 ## Development checks
@@ -72,6 +84,7 @@ From the workspace root:
 luajit koreader-plugin/test/unit.lua
 luajit koreader-plugin/test/main.lua
 luajit koreader-plugin/test/transport.lua
+luajit koreader-plugin/test/locations.lua
 ```
 
 The lifecycle tests cover pairing, account-change cancellation, stable retry IDs, no mutation echo after a remote application, approximate jump confirmation, and preserving a newer local position during an older upload acknowledgement. They use an in-memory transport, not a claim of network interoperability.
@@ -88,6 +101,15 @@ cd /path/to/extracted/koreader
 The native test initializes crengine, opens the EPUB, resolves inline multi-node highlights across chapters, captures and resolves native pointers, and rejects repeated or missing passages. It writes its own crengine cache beside the temporary EPUB. Use a disposable directory, not a real reader's data directory.
 
 The fixtures are original minimal EPUB content containing repeated quotes, multiple chapters, inline emphasis, and an encoded resource path. `package-fixture.py` emits a deterministic archive without committing generated binaries.
+
+`fixtures/chapter-locations` adds nested and fragment-based TOC entries, unequal
+section lengths, repeated section titles, and a chapter that continues across
+resources. Pass that directory as the packager's optional second argument.
+`test/locations-native.lua` consumes that EPUB and its actual API-generated map
+JSON to check the same section identities under different native layouts.
+`test/locations-live-api.lua` is a second driver for the native acceptance harness;
+it checks chapter-aware native/browser progress, replay ordering, legacy writes,
+and revocation over verified HTTPS.
 
 For the real API/PostgreSQL round-trip, `test/live-api.lua` is driven by the API's
 native acceptance harness over a private approval control channel. It exercises

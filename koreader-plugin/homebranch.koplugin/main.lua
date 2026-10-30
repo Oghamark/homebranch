@@ -36,6 +36,7 @@ end
 function Homebranch:init()
     self.epoch = 0
     self.anchors = dofile(self.path .. "/anchors.lua")
+    self.locations = dofile(self.path .. "/locations.lua")
     self.identity = dofile(self.path .. "/identity.lua")
     self.state_ops = dofile(self.path .. "/state.lua")
     self.transport = dofile(self.path .. "/transport.lua")
@@ -147,6 +148,7 @@ function Homebranch:claimPairing()
             self.pairing = nil
             self.current_state = nil
             self.link_verified = nil
+            self.location_bounds = nil
             self:save()
             self:notice("Homebranch paired. Use Sync now to link this EPUB and synchronize.")
         else error("Unexpected pairing response. Start pairing again.") end
@@ -173,6 +175,7 @@ function Homebranch:forget()
             self.settings.account = nil
             self.current_state = nil
             self.link_verified = nil
+            self.location_bounds = nil
             self:save()
         end,
     })
@@ -353,21 +356,50 @@ function Homebranch:offerProgress(progress)
     local epoch = self.epoch
     if progress.revision == state.seenProgress then return end
     local local_percent = self.ui.rolling:getLastPercent()
-    if math.abs(progress.percentage - local_percent) < 0.001 then
+    local local_point = self.ui.rolling:getLastProgress()
+    local location = type(progress.location) == "table" and progress.location or nil
+    local native = location and location.native
+    local compatible_native = not location or (self.locations.compatible(self.location_bounds, location)
+        and type(native) == "table" and native.engine == "crengine"
+        and native.domVersion == self.ui.doc_settings:readSetting("cre_dom_version"))
+    local exact = progress.source == "koreader" and type(progress.nativeProgress) == "string"
+        and self.ui.document:isXPointerInDocument(progress.nativeProgress) and compatible_native
+    if (exact and progress.nativeProgress == local_point)
+        or (not location and not progress.nativeProgress
+            and math.abs(progress.percentage - local_percent) < 0.001) then
         state.seenProgress = progress.revision
         self:save()
         return
     end
-    local exact = progress.source == "koreader" and type(progress.nativeProgress) == "string"
-        and self.ui.document:isXPointerInDocument(progress.nativeProgress)
+    local target, location_warning
+    if not exact and location then
+        target, location_warning = self.locations.target(self.ui.document, self.location_bounds, location)
+    end
+    local destination = target and target.label or string.format("%s%.1f%% of the book",
+        exact and "" or "approximately ", progress.percentage * 100)
+    if location_warning then destination = destination .. "\nChapter could not be verified; using whole-book approximation." end
     UIManager:show(ConfirmBox:new {
-        text = string.format("Jump to %s%.1f%% from %s?",
-            exact and "" or "approximately ", progress.percentage * 100, progress.device or "another reader"),
+        text = string.format("Jump to %s from %s?", destination, progress.device or "another reader"),
         ok_text = exact and "Jump" or "Jump approximately",
         ok_callback = function()
             if epoch ~= self.epoch or self.current_state ~= state then return end
+            local jump_target = target
+            if target then
+                local reason
+                jump_target, reason = self.locations.target(self.ui.document, self.location_bounds, location)
+                if not jump_target then
+                    self:notice("Homebranch: " .. reason .. " No chapter jump was applied; sync again to review the destination.")
+                    return
+                end
+            end
+            if exact and location and (not self.locations.compatible(self.location_bounds, location)
+                or native.domVersion ~= self.ui.doc_settings:readSetting("cre_dom_version")) then
+                self:notice("Homebranch: The reader's DOM version changed. Sync again before applying this native position.")
+                return
+            end
             self.applying = true
             if exact then self.ui:handleEvent(Event:new("GotoXPointer", progress.nativeProgress))
+            elseif jump_target then self.ui:handleEvent(Event:new("GotoXPointer", jump_target.point))
             else self.ui:handleEvent(Event:new("GotoPercent", progress.percentage * 100)) end
             self.applying = false
             state.lastProgress = self.ui.rolling:getLastProgress()
@@ -379,15 +411,39 @@ function Homebranch:offerProgress(progress)
             if epoch ~= self.epoch or self.current_state ~= state then return end
             state.seenProgress = progress.revision
             state.lastProgress = nil
-            state.pendingProgress = {
-                document = self.ui.doc_settings:readSetting("partial_md5_checksum")
-                    or util.partialMD5(self.ui.document.file),
-                progress = self.ui.rolling:getLastProgress(), percentage = self.ui.rolling:getLastPercent(),
-                device = Device.model, device_id = self.settings.account.deviceId, mutationId = uuid(),
-            }
+            state.pendingProgress = self:progressOperation()
             self:save()
         end,
     })
+end
+
+function Homebranch:progressOperation()
+    local point = self.ui.rolling:getLastProgress()
+    local location = self.locations.capture(self.ui.document, self.location_bounds, point)
+    local dom_version = self.ui.doc_settings:readSetting("cre_dom_version")
+    if location and type(dom_version) == "number" and dom_version > 0
+        and dom_version <= 2147483647 and dom_version % 1 == 0 then
+        location.native = { engine = "crengine", domVersion = dom_version }
+    end
+    return {
+        document = self.ui.doc_settings:readSetting("partial_md5_checksum") or util.partialMD5(self.ui.document.file),
+        progress = point, percentage = self.ui.rolling:getLastPercent(), device = Device.model,
+        device_id = self.settings.account.deviceId, mutationId = uuid(),
+        location = location,
+    }
+end
+
+function Homebranch:loadLocationMap(match)
+    self.location_bounds = nil
+    if not match.capabilities or match.capabilities.portableLocation ~= 1 then return end
+    assert(type(match.formatId) == "string" and match.formatId:match("^[%w%-]+$"),
+        "Invalid verified EPUB format.")
+    local map = self:request("GET", "/books/" .. match.bookId .. "/location-map?formatId=" .. match.formatId)
+    assert(map.formatId == match.formatId and (not self.current_state.contentHash
+        or map.contentHash == self.current_state.contentHash), "EPUB chapter map does not match this edition.")
+    local bounds, err = self.locations.prepare(self.ui.document, map, self.anchors)
+    assert(bounds, err)
+    self.location_bounds = bounds
 end
 
 function Homebranch:pushProgress(state)
@@ -429,6 +485,7 @@ function Homebranch:sync(interactive)
             "Homebranch returned a different book for this EPUB. Previous local sync data was retained.")
         state.bookId, state.formatId = match.bookId, match.formatId
         assert(state.bookId and state.formatId, "Homebranch could not verify this EPUB.")
+        self:loadLocationMap(match)
         self.link_verified = true
         self:save()
     end
@@ -440,11 +497,7 @@ function Homebranch:sync(interactive)
     elseif state.pendingProgress then
         self:pushProgress(state)
     elseif interactive and (type(remote) ~= "table" or not remote.percentage) then
-        state.pendingProgress = {
-            document = digest, progress = self.ui.rolling:getLastProgress(),
-            percentage = self.ui.rolling:getLastPercent(), device = Device.model, device_id = account.deviceId,
-            mutationId = uuid(),
-        }
+        state.pendingProgress = self:progressOperation()
         self:save()
         self:pushProgress(state)
     end
@@ -460,6 +513,9 @@ function Homebranch:sync(interactive)
         if state.identityWarning then
             message = message .. "\n\nContent-hash matching unavailable: " .. state.identityWarning
                 .. " The EPUB was matched by its binary checksum."
+        end
+        if self.location_bounds and self.location_bounds.warning then
+            message = message .. "\n\n" .. self.location_bounds.warning
         end
         self:notice(message)
     end
@@ -504,12 +560,7 @@ function Homebranch:onPageUpdate()
     local state = self.current_state
     local progress = self.ui.rolling:getLastProgress()
     if state.lastProgress ~= progress then
-        local digest = self.ui.doc_settings:readSetting("partial_md5_checksum") or util.partialMD5(self.ui.document.file)
-        state.pendingProgress = {
-            document = digest, progress = progress, percentage = self.ui.rolling:getLastPercent(),
-            device = Device.model, device_id = self.settings.account.deviceId,
-            mutationId = uuid(),
-        }
+        state.pendingProgress = self:progressOperation()
         self:save()
         if self.settings.auto_sync then UIManager:unschedule(self.run_task); UIManager:scheduleIn(10, self.run_task) end
     end
@@ -520,6 +571,7 @@ Homebranch.onPosUpdate = Homebranch.onPageUpdate
 function Homebranch:onReaderReady()
     self.current_state = nil
     self.link_verified = nil
+    self.location_bounds = nil
     if self.settings.account and self:isEpub() then
         local digest = self.ui.doc_settings:readSetting("partial_md5_checksum") or util.partialMD5(self.ui.document.file)
         self.current_state = digest and self:documentState(digest) or nil
@@ -546,6 +598,7 @@ function Homebranch:onCloseDocument()
     UIManager:unschedule(self.claim_task)
     self.current_state = nil
     self.link_verified = nil
+    self.location_bounds = nil
 end
 
 function Homebranch:addToMainMenu(menu)

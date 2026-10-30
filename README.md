@@ -108,8 +108,12 @@ is normally `/api/koreader` behind the web proxy, or `/koreader` on the API itse
 Pairing creates a revocable sync-only device credential, not another Homebranch
 password. The plugin stores that limited credential in KOReader's ordinary
 settings, so treat reader backups as sensitive and revoke lost devices in
-**Settings > KOReader**. Cross-reader percentage jumps are labeled approximate;
-ambiguous annotation anchors are retained as unresolved rather than guessed.
+**Settings > KOReader**. Chapter-aware EPUB sync preserves verified TOC sections
+and approximate progress within them, with device-local chapter page estimates
+when available. Compatible native positions remain preferred; missing or
+unverifiable chapter information uses labeled resource or whole-book fallback.
+Upgrade the API and its registered migrations before updating clients.
+Ambiguous annotation anchors are retained as unresolved rather than guessed.
 
 ## Contributing
 
