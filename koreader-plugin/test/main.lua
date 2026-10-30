@@ -90,6 +90,87 @@ test("initial sync reads remote before publishing and does not echo remote jumps
     assert(plugin.current_state.pendingProgress == nil)
     assert(plugin.current_state.seenProgress == "2")
 end)
+test("chapter-aware jumps are offered even when whole-book percentages coincide", function()
+    local plugin = instance()
+    plugin.ui.document.info = { doc_height = 1000 }
+    local rendered_position = 400
+    plugin.locations.target = function()
+        return { point = "chapter-two-" .. rendered_position, label = "Chapter two, approximately 50% through chapter" }
+    end
+    plugin:offerProgress { percentage = 0.25, revision = "chapter-revision", source = "web",
+        location = {}, device = "Browser" }
+    local dialog = dialogs[#dialogs]
+    assert(dialog.text:find("Chapter two") and dialog.text:find("through chapter"))
+    rendered_position = 600
+    dialog.ok_callback()
+    assert(plugin.ui.rolling:getLastProgress() == "chapter-two-600")
+    plugin:onPageUpdate()
+    assert(plugin.current_state.pendingProgress == nil)
+end)
+test("new maps do not retrofit portable fields into an already queued operation", function()
+    local plugin = instance()
+    local operation = { mutationId = "queued-before-upgrade", progress = "old-pointer", percentage = 0.1 }
+    plugin.current_state.pendingProgress = operation
+    plugin.locations.prepare = function(_, map) return { map = map } end
+    plugin.transport.request = function(_, method, path)
+        assert(method == "GET" and path == "/books/book/location-map?formatId=format")
+        return { body = { formatId = "format", contentHash = "contents" } }
+    end
+    plugin:loadLocationMap { bookId = "book", formatId = "format", capabilities = { portableLocation = 1 } }
+    assert(plugin.current_state.pendingProgress == operation and operation.location == nil)
+    assert(operation.mutationId == "queued-before-upgrade")
+end)
+test("new reading changes capture portable coordinates after map verification", function()
+    local plugin, move = instance()
+    plugin.location_bounds = { map = {} }
+    plugin.locations.capture = function(_, bounds, point)
+        assert(bounds == plugin.location_bounds and point == "new-pointer")
+        return { version = 1, chapterId = "Text/chapter.xhtml#second", chapterProgression = 0.4 }
+    end
+    plugin.ui.doc_settings.readSetting = function(_, key)
+        return key == "cre_dom_version" and 20240114 or "digest"
+    end
+    move("new-pointer", 0.6)
+    plugin:onPageUpdate()
+    local queued = plugin.current_state.pendingProgress
+    assert(queued.progress == "new-pointer" and queued.location.chapterProgression == 0.4)
+    assert(queued.location.chapterId == "Text/chapter.xhtml#second")
+    assert(queued.location.native.engine == "crengine" and queued.location.native.domVersion == 20240114)
+end)
+test("portable native pointers require matching DOM provenance before precise restoration", function()
+    for _, dom_version in ipairs({ 20240114, 20200101 }) do
+        local plugin = instance()
+        plugin.ui.document.info = { doc_height = 1000 }
+        plugin.ui.doc_settings.readSetting = function(_, key)
+            return key == "cre_dom_version" and 20240114 or "digest"
+        end
+        plugin.locations.compatible = function() return true end
+        plugin.locations.target = function()
+            return { point = "chapter-estimate", label = "Chapter, approximately 50% through chapter" }
+        end
+        plugin:offerProgress { percentage = 0.8, revision = "dom-version", source = "koreader",
+            nativeProgress = "native-pointer", location = { native = { engine = "crengine", domVersion = dom_version } } }
+        dialogs[#dialogs].ok_callback()
+        if dom_version == 20240114 then assert(plugin.ui.rolling:getLastProgress() == "native-pointer")
+        else assert(plugin.ui.rolling:getLastProgress() == "chapter-estimate") end
+    end
+end)
+test("native confirmation refuses a DOM version changed while the prompt was open", function()
+    local plugin = instance()
+    local dom_version = 20240114
+    plugin.ui.doc_settings.readSetting = function(_, key)
+        return key == "cre_dom_version" and dom_version or "digest"
+    end
+    plugin.locations.compatible = function() return true end
+    plugin:offerProgress { percentage = 0.8, revision = "changed-dom", source = "koreader",
+        nativeProgress = "native-pointer", location = { native = { engine = "crengine", domVersion = dom_version } } }
+    local dialog = dialogs[#dialogs]
+    dom_version = 20200101
+    dialog.ok_callback()
+    assert(plugin.ui.rolling:getLastProgress() == "start")
+    assert(plugin.current_state.seenProgress ~= "changed-dom")
+    assert(dialogs[#dialogs].text:find("DOM version changed"))
+end)
 test("interrupted uploads retain the same mutation until acknowledged", function()
     local plugin = instance()
     plugin.current_state.bookId = "book"

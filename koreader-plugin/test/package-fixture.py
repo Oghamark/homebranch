@@ -3,7 +3,7 @@ import pathlib
 import sys
 import zipfile
 
-source = pathlib.Path(__file__).parent / "fixtures" / "epub"
+source = pathlib.Path(sys.argv[2]) if len(sys.argv) > 2 else pathlib.Path(__file__).parent / "fixtures" / "epub"
 with zipfile.ZipFile(sys.argv[1], "w") as archive:
     archive.writestr(zipfile.ZipInfo("mimetype"), "application/epub+zip", compress_type=zipfile.ZIP_STORED)
     for path in sorted(source.rglob("*")):
