@@ -1,6 +1,6 @@
 local Locations = {}
 
-local function locationDocument(document, anchors)
+local function locationDocument(document, anchors, checkpoint)
     if not document.getHTMLFromXPointer or not document.getHTMLFromXPointers then return document end
     local parser = require("htmlparser")
     local util = require("util")
@@ -9,13 +9,19 @@ local function locationDocument(document, anchors)
         .. "footer form h1 h2 h3 h4 h5 h6 header hr li main nav ol p pre section table tbody td th thead tr ul "
         .. "docfragment"):gmatch("%S+") do blocks[tag] = true end
     local function text(html)
+        checkpoint()
         if type(html) ~= "string" or #html > 4 * 1024 * 1024 then return "" end
         local tags = 0
-        for _ in html:gmatch("<[%w%-]+[%s/>]") do tags = tags + 1 end
-        if tags > 16384 then return "" end
+        for _ in html:gmatch("<[%w%-]+[%s/>]") do
+            tags = tags + 1
+            if tags % 128 == 0 then checkpoint() end
+            if tags > 16384 then return "" end
+        end
         local tree = parser.parse(html, tags + 8)
+        checkpoint()
         local pieces = {}
         local function visit(node, depth)
+            checkpoint()
             if depth > 128 then return false end
             local tag = node.name:lower()
             local attrs = node.attributes
@@ -39,9 +45,13 @@ local function locationDocument(document, anchors)
         local value = util.htmlEntitiesToUtf8(table.concat(pieces))
         for _, space in ipairs({ "\194\160", "\225\154\128", "\226\128\168", "\226\128\169",
             "\226\128\175", "\226\129\159", "\227\128\128", "\239\187\191" }) do
+            checkpoint()
             value = value:gsub(space, " ")
         end
-        for byte = 128, 138 do value = value:gsub("\226\128" .. string.char(byte), " ") end
+        for byte = 128, 138 do
+            checkpoint()
+            value = value:gsub("\226\128" .. string.char(byte), " ")
+        end
         return anchors.normalize(value)
     end
     -- crengine's plain text joins adjacent blocks. Its public HTML range
@@ -78,19 +88,33 @@ local function height(document)
     return type(value) == "number" and value > 0 and value < math.huge and value or nil
 end
 
-function Locations.prepare(document, map, anchors)
+function Locations.prepare(document, map, anchors, options)
     if type(map) ~= "table" or map.version ~= 1 or type(map.resources) ~= "table"
         or type(map.chapters) ~= "table" or #map.resources > 4096 or #map.chapters > 4096
         or type(map.formatId) ~= "string" or type(map.contentHash) ~= "string"
         or type(map.fingerprint) ~= "string" then
         return nil, "Invalid EPUB location map."
     end
-    local prepared = { map = map, resources = {}, chapters = {} }
-    local source = locationDocument(document, anchors)
-    local body, work, resolved = nil, 0, {}
+    options = options or {}
+    local cache = options.cache
+    if type(cache) ~= "table" or cache.version ~= 1 or cache.formatId ~= map.formatId
+        or cache.contentHash ~= map.contentHash or cache.mapFingerprint ~= map.fingerprint
+        or type(options.domVersion) ~= "number" or options.domVersion <= 0
+        or options.domVersion % 1 ~= 0 or cache.domVersion ~= options.domVersion
+        or type(cache.resources) ~= "table" or type(cache.chapters) ~= "table" then
+        cache = { version = 1, formatId = map.formatId, contentHash = map.contentHash,
+            mapFingerprint = map.fingerprint, domVersion = options.domVersion, resources = {}, chapters = {} }
+    end
+    local prepared = { document = document, map = map, resources = {}, chapters = {}, cache = cache,
+        resource_indices = {}, chapter_indices = {} }
+    local active_checkpoint = function() end
+    local function checkpoint() active_checkpoint() end
+    local source = locationDocument(document, anchors, checkpoint)
+    local body, resolved = nil, {}
     local cached_document = setmetatable({
         getTextFromXPointer = function(_, pointer)
             if pointer ~= "/body" then return source:getTextFromXPointer(pointer) end
+            checkpoint()
             if body == nil then body = source:getTextFromXPointer(pointer) or false end
             return body or nil
         end,
@@ -99,40 +123,157 @@ function Locations.prepare(document, map, anchors)
         if type(value) ~= "function" then return value end
         return function(_, ...) return value(source, ...) end
     end })
-    local function resolve(items, target, chapters)
+    local function validate(items, chapters)
         for index, item in ipairs(items) do
             if type(item) ~= "table" or type(item.href) ~= "string"
                 or type(item.start) ~= "number" or type(item["end"]) ~= "number"
                 or item.start % 1 ~= 0 or item["end"] % 1 ~= 0
                 or item.start < 0 or item["end"] < item.start or item["end"] > 64 * 1024 * 1024
+                or (index > 1 and items[index - 1]["end"] > item.start)
                 or (chapters and (type(item.id) ~= "string" or type(item.title) ~= "string"
                     or (item.kind ~= "chapter" and item.kind ~= "resource"))) then
                 return nil, "Invalid EPUB section boundaries."
             end
-            if type(item.anchor) == "table" and type(item.anchor.exact) == "string" then
-                local key = item.anchor.exact .. "\0" .. (item.anchor.prefix or "") .. "\0" .. (item.anchor.suffix or "")
-                local point = resolved[key]
-                if point == nil then
-                    if work >= 128 * 1024 * 1024 then
-                        prepared.warning = "Chapter mapping reached its safe work limit; unresolved sections use approximate fallback."
-                        point = false
-                    else
-                        local position = anchors.resolve(cached_document, item.anchor)
-                        point = position and position.pos0 or false
-                        work = work + (type(body) == "string" and #body or #item.anchor.exact)
-                    end
-                    resolved[key] = point
-                end
-                if point then target[index] = point end
-            end
         end
         return true
     end
-    local ok, err = resolve(map.resources, prepared.resources)
+    local ok, err = validate(map.resources)
     if not ok then return nil, err end
-    ok, err = resolve(map.chapters, prepared.chapters, true)
+    ok, err = validate(map.chapters, true)
     if not ok then return nil, err end
+    local last = map.resources[#map.resources]
+    if last and last["end"] > 4 * 1024 * 1024 then
+        prepared.limit_warning = "The publication exceeds the safe duplicate-check limit; unresolved sections use approximate fallback."
+        prepared.warning = prepared.limit_warning
+    end
+
+    local function resolve(items, pointers, saved, index, chapters)
+        checkpoint()
+        local item = items[index]
+        if not item or pointers[index] ~= nil then return pointers[index] end
+        local function remember(point)
+            pointers[index] = point
+            if point then
+                local indices = chapters and prepared.chapter_indices or prepared.resource_indices
+                local low, high = 1, #indices
+                while low <= high do
+                    local middle = math.floor((low + high) / 2)
+                    if indices[middle] < index then low = middle + 1 else high = middle - 1 end
+                end
+                table.insert(indices, low, index)
+                saved[chapters and item.id or item.href] = point
+            end
+            return point
+        end
+        local key = chapters and item.id or item.href
+        local point = saved[key]
+        if type(point) == "string" and #point <= 4096 and document:isXPointerInDocument(point) then
+            return remember(point)
+        end
+        saved[key] = nil
+        if prepared.limit_warning or type(item.anchor) ~= "table" or type(item.anchor.exact) ~= "string" then
+            pointers[index] = false
+            return nil
+        end
+        local anchor_key = item.anchor.exact .. "\0" .. (item.anchor.prefix or "") .. "\0" .. (item.anchor.suffix or "")
+        point = resolved[anchor_key]
+        if point == nil then
+            local position = anchors.resolve(cached_document, item.anchor, {
+                batch = true, normalized_body = source ~= document, checkpoint = checkpoint,
+            })
+            checkpoint()
+            point = position and position.pos0 or false
+            resolved[anchor_key] = point
+        end
+        return remember(point)
+    end
+    local function ensure(items, pointers, saved, index, chapters)
+        if resolve(items, pointers, saved, index, chapters) then
+            resolve(items, pointers, saved, index + 1, chapters)
+        end
+    end
+    local function current(items, pointers, saved, point, chapters)
+        local low, high, found = 1, #items, nil
+        while low <= high do
+            local middle = math.floor((low + high) / 2)
+            local boundary = resolve(items, pointers, saved, middle, chapters)
+            if not boundary then return end
+            local order = document:compareXPointers(boundary, point)
+            if not order then return end
+            if order >= 0 then found, low = middle, middle + 1 else high = middle - 1 end
+        end
+        if found then ensure(items, pointers, saved, found, chapters) end
+    end
+    prepared.resolve = function(point, location, control)
+        active_checkpoint = control
+        if Locations.compatible(prepared, location) then
+            for index, item in ipairs(map.resources) do
+                if item.href == location.href then
+                    ensure(map.resources, prepared.resources, cache.resources, index)
+                    break
+                end
+            end
+            if location.chapterId then
+                for index, item in ipairs(map.chapters) do
+                    if item.id == location.chapterId then
+                        ensure(map.chapters, prepared.chapters, cache.chapters, index, true)
+                        break
+                    end
+                end
+            end
+        end
+        if point and document:isXPointerInDocument(point) then
+            current(map.resources, prepared.resources, cache.resources, point)
+            current(map.chapters, prepared.chapters, cache.chapters, point, true)
+        end
+    end
     return prepared
+end
+
+function Locations.resolve(document, prepared, point, location, options)
+    if not prepared then return true end
+    assert(prepared.document == document, "Chapter mapping belongs to a different reader document.")
+    options = options or {}
+    local now = options.now or require("socket").gettime
+    local deadline, expired = now() + (options.budget or 0.5), {}
+    local function checkpoint()
+        if now() >= deadline then error(expired, 0) end
+        if options.checkpoint then options.checkpoint() end
+        if now() >= deadline then error(expired, 0) end
+    end
+    local requested = Locations.compatible(prepared, location) and location or nil
+    local function same_request(job)
+        return job.point == point and job.href == (requested and requested.href)
+            and job.chapterId == (requested and requested.chapterId)
+    end
+    local function job()
+        return {
+            point = point, href = requested and requested.href, chapterId = requested and requested.chapterId,
+            thread = coroutine.create(function()
+                -- Keep partially scanned quotes and HTML traversal across sync
+                -- budgets instead of restarting the same expensive anchor.
+                prepared.resolve(point, requested, function() coroutine.yield() end)
+            end),
+        }
+    end
+    local ok, err = pcall(function()
+        while true do
+            checkpoint()
+            local pending = prepared.pending_resolution or job()
+            prepared.pending_resolution = pending
+            local resumed, reason = coroutine.resume(pending.thread)
+            if not resumed then error(reason, 0) end
+            if coroutine.status(pending.thread) == "dead" then
+                prepared.pending_resolution = nil
+                if same_request(pending) then return end
+            end
+        end
+    end)
+    if not ok and err ~= expired then prepared.pending_resolution = nil; error(err, 0) end
+    prepared.warning = not ok and
+        "Chapter mapping paused at its time limit; unresolved sections use approximate fallback. Later syncs resume."
+        or prepared.limit_warning
+    return ok, prepared.warning
 end
 
 local function range(document, items, pointers, index)
@@ -147,16 +288,20 @@ local function range(document, items, pointers, index)
     return { first = first, ending = ending, start_pos = start_pos, end_pos = end_pos }
 end
 
-local function containing(document, items, pointers, point)
-    for index, item in ipairs(items) do
-        local bounds = range(document, items, pointers, index)
-        if bounds then
-            local after_start = document:compareXPointers(bounds.first, point)
-            local before_end = bounds.ending and document:compareXPointers(bounds.ending, point)
-            if after_start and after_start >= 0 and (not bounds.ending or (before_end and before_end < 0)) then
-                return item, bounds
-            end
-        end
+local function containing(document, items, pointers, indices, point)
+    local low, high, found = 1, #indices, nil
+    while low <= high do
+        local middle = math.floor((low + high) / 2)
+        local boundary = pointers[indices[middle]]
+        if not document:isXPointerInDocument(boundary) then return nil end
+        local order = document:compareXPointers(boundary, point)
+        if not order then return nil end
+        if order >= 0 then found, low = indices[middle], middle + 1 else high = middle - 1 end
+    end
+    local bounds = found and range(document, items, pointers, found)
+    if bounds then
+        local before_end = bounds.ending and document:compareXPointers(bounds.ending, point)
+        if not bounds.ending or (before_end and before_end < 0) then return items[found], bounds end
     end
 end
 
@@ -199,9 +344,9 @@ local function destination(document, bounds, pos)
 end
 
 function Locations.capture(document, prepared, point)
-    if not prepared or not document:isXPointerInDocument(point) then return nil end
+    if not prepared or prepared.document ~= document or not document:isXPointerInDocument(point) then return nil end
     local map = prepared.map
-    local resource, resource_bounds = containing(document, map.resources, prepared.resources, point)
+    local resource, resource_bounds = containing(document, map.resources, prepared.resources, prepared.resource_indices, point)
     if not resource then return nil end
     local resource_progression = progression(document, point, resource_bounds)
     if not resource_progression then return nil end
@@ -210,7 +355,7 @@ function Locations.capture(document, prepared, point)
         mapFingerprint = map.fingerprint, href = resource.href,
         resourceProgression = resource_progression, basis = "rendered",
     }
-    local chapter, chapter_bounds = containing(document, map.chapters, prepared.chapters, point)
+    local chapter, chapter_bounds = containing(document, map.chapters, prepared.chapters, prepared.chapter_indices, point)
     if chapter and chapter.kind == "chapter" then
         result.chapterId = chapter.id
         result.chapterProgression = progression(document, point, chapter_bounds)
@@ -227,7 +372,7 @@ function Locations.target(document, prepared, location)
         return nil, "Invalid portable EPUB location."
     end
     local map = prepared and prepared.map
-    if not Locations.compatible(prepared, location) then
+    if not Locations.compatible(prepared, location) or prepared.document ~= document then
         return nil, "The saved chapter belongs to an unverified edition or chapter map."
     end
     local resource

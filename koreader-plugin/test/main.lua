@@ -326,4 +326,95 @@ test("interrupted remote batches recover before local changes are collected", fu
         assert(#plugin.current_state.pending == 0)
     end
 end)
+
+test("chapter preparation yields to the UI and cancels safely on document or account changes", function()
+    local original_wrap = package.loaded["ui/trapper"].wrap
+    local original_time = package.loaded["socket"].gettime
+    for _, change in ipairs({ "document", "account", "dom", "reopen" }) do
+        local plugin, move = instance()
+        move("600", 0.6)
+        local state, searches, after_mapping, clock, worker = plugin.current_state, 0, false, 0
+        local pending = { mutationId = "immutable-before-mapping", progress = "old-pointer", percentage = 0.2 }
+        state.pendingProgress = pending
+        local dom_version = 20240114
+        plugin.ui.doc_settings.readSetting = function(_, key)
+            return key == "cre_dom_version" and dom_version or "digest"
+        end
+        plugin.ui.document.compareXPointers = function() return 1 end
+        plugin.anchors.resolve = function(_, _, options)
+            searches = searches + 1
+            for _ = 1, 1000 do options.checkpoint() end
+            error("Mapping did not yield or stop at its time limit.")
+        end
+        plugin.syncAnnotations = function() after_mapping = true end
+        local map = { version = 1, formatId = "format", contentHash = "contents", fingerprint = "map",
+            resources = { { href = "one.xhtml", start = 0, ["end"] = 1000, anchor = { exact = "First" } } },
+            chapters = {} }
+        plugin.transport.request = function(_, _, path)
+            if path == "/documents/resolve" then
+                return { body = { bookId = "book", formatId = "format", capabilities = { portableLocation = 1 } } }
+            end
+            if path:find("/location%-map") then return { body = map } end
+            return { body = { percentage = 0.8, source = "web", revision = "unseen" } }
+        end
+        package.loaded["socket"].gettime = function() clock = clock + 0.001; return clock end
+        package.loaded["ui/trapper"].wrap = function(_, callback)
+            worker = coroutine.create(callback)
+            assert(coroutine.resume(worker))
+        end
+        scheduled = {}
+        plugin:startSync(false)
+        assert(plugin.busy and searches == 1 and coroutine.status(worker) == "suspended")
+        assert(#scheduled == 1 and scheduled[1][1] == 0.05)
+        assert(state.pendingProgress == pending and pending.location == nil)
+        if change == "document" then plugin:onCloseDocument()
+        elseif change == "account" then
+            plugin.epoch = plugin.epoch + 1
+            plugin.settings.account = { username = "other", documents = {} }
+            plugin.current_state = nil
+        elseif change == "dom" then dom_version = 20200101
+        else plugin:onReaderReady() end
+        local saves = 0
+        plugin.store.flush = function() saves = saves + 1 end
+        scheduled[1][2]()
+        assert(coroutine.status(worker) == "dead" and not plugin.busy and not after_mapping)
+        assert(searches == 1 and saves == 0 and not state.locationCache)
+        assert(state.pendingProgress == pending and pending.mutationId == "immutable-before-mapping")
+        assert(dialogs[#dialogs].text:find("cancelled"))
+    end
+    package.loaded["ui/trapper"].wrap = original_wrap
+    package.loaded["socket"].gettime = original_time
+end)
+
+test("automatic chapter deadlines leave sync and immutable queued progress usable", function()
+    local plugin, move = instance()
+    move("600", 0.6)
+    local clock, searches, annotations = 0, 0, false
+    local original_time = package.loaded["socket"].gettime
+    package.loaded["socket"].gettime = function() return clock end
+    plugin.anchors.resolve = function(_, _, options)
+        searches = searches + 1
+        for _ = 1, 1000 do clock = clock + 0.001; options.checkpoint() end
+        error("Time limit was not checked inside the anchor.")
+    end
+    plugin.current_state.bookId = "book"
+    local pending = { mutationId = "unchanged", progress = "old", percentage = 0.2 }
+    plugin.current_state.pendingProgress = pending
+    plugin.link_verified = true
+    plugin.location_bounds = assert(plugin.locations.prepare(plugin.ui.document, {
+        version = 1, formatId = "format", contentHash = "contents", fingerprint = "map",
+        resources = { { href = "one.xhtml", start = 0, ["end"] = 1000, anchor = { exact = "First" } } },
+        chapters = {},
+    }, plugin.anchors, { domVersion = "digest" }))
+    plugin.syncAnnotations = function() annotations = true end
+    plugin.transport.request = function(_, method, _, body)
+        if method == "PUT" then assert(body == pending and body.location == nil) end
+        return { body = { nativeProgress = "old", revision = "known" } }
+    end
+    plugin.current_state.seenProgress = "known"
+    plugin:startSync(false)
+    assert(annotations and searches == 1 and clock < 0.51 and not plugin.busy)
+    assert(plugin.location_bounds.warning:find("time limit") and not plugin.current_state.pendingProgress)
+    package.loaded["socket"].gettime = original_time
+end)
 print("Passed " .. count .. " plugin lifecycle tests.")

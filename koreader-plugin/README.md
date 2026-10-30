@@ -51,6 +51,7 @@ TLS verification checks both the server certificate chain and its subject altern
 - Chapter identity and passage precision are separate: the section can be exact while placement within it remains **approximate**. Multiple sections can share a resource, and a section can span resources. Repeated titles are not identifiers. The dialog shows the section and its percentage, with an approximate chapter page for the current device when calculable.
 - Chapter jumps select a verified in-section native pointer, not a whole-book page percentage. A paginated page can also display preceding-section text; the selected logical reading point still belongs to the requested chapter. Applying a remote jump does not automatically overwrite its source coordinate.
 - Missing, ambiguous, or stale chapter boundaries use an explicitly labeled resource or whole-book approximation. Boundary matching has a bounded work budget; a large or unsupported publication can retain fallback behavior rather than guessing a chapter. Old servers without the chapter-location capability continue using the legacy progress protocol.
+- Chapter mapping resolves only the current or incoming section and its needed boundaries, with cooperative UI checkpoints. Automatic sync gives mapping a 0.5-second wall-time budget; **Sync now** allows 2 seconds. Budget checks occur between native calls and bounded HTML parsing steps, not inside them. Unfinished scans resume on later syncs instead of starting over. Verified native boundaries are cached per edition, chapter map, and reader DOM version; rendered positions are recalculated after layout changes. Page turns only consult the cache and never start a chapter search.
 - Exact matching uses the verified EPUB plus the original native text range or literal quoted text. Repeated text must be disambiguated by context. The plugin never uses fuzzy matching or guesses a range.
 - Unresolved annotations retain their quote and note under **Unresolved annotations** and in Homebranch. They are retried on later syncs and are not silently deleted.
 - Only EPUB text highlights and associated notes are supported. PDF coordinates, standalone page bookmarks, PDF/audio progress bridging, and shared/public annotations are outside this integration.
@@ -61,7 +62,7 @@ The native anchor probe and reader-loading smoke check use KOReader **v2026.07.1
 
 The separate codecs preserve native anchors and portable quote/context selectors. They do not claim that a crengine XPointer is a Readium locator or that CFI round-trips were implemented.
 
-To keep search bounded on e-readers, resolution stops at 257 initial-token hits or its character-work limit. A very common opening word, an unsupported layout, changed EPUB content, or ambiguous surrounding text can therefore leave an annotation unresolved instead of producing an unsafe placement. Full-quote crengine searches do not span inline elements; the plugin verifies candidates by extending public character pointers and checking the complete extracted quote.
+To keep search bounded on e-readers, resolution stops at 257 search hits or its character-work limit. A very common opening word, an unsupported layout, changed EPUB content, or ambiguous surrounding text can therefore leave an annotation unresolved instead of producing an unsafe placement. Full-quote crengine searches do not span inline elements; the plugin verifies candidates by extending public character pointers and checking the complete extracted quote. Chapter searches try a short prefix and extend ranges in batches, retrying first-token search when needed. Independent full-book duplicate checking still prevents a missed inline occurrence from being treated as unique. Annotation matching retains its existing first-token behavior.
 
 Pending queues and cursors are per paired account and EPUB identity. Tombstones are not inferred from a missing page of remote results. Replacing an EPUB with a different edition requires a newly verified identity rather than reusing old positions.
 
@@ -107,6 +108,11 @@ section lengths, repeated section titles, and a chapter that continues across
 resources. Pass that directory as the packager's optional second argument.
 `test/locations-native.lua` consumes that EPUB and its actual API-generated map
 JSON to check the same section identities under different native layouts.
+For a synthetic book with at least 90 sections and its API-generated map, add
+`--scale` after those arguments to exercise bounded sync passes, UI scheduling
+checkpoints, eventual section resolution, and cache reuse across layouts. This
+mode reports total mapping time and the longest uninterrupted native slice; it
+does not substitute for checking an actual e-reader.
 `test/locations-live-api.lua` is a second driver for the native acceptance harness;
 it checks chapter-aware native/browser progress, replay ordering, legacy writes,
 and revocation over verified HTTPS.

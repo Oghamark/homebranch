@@ -12,6 +12,7 @@ local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local sha2 = require("ffi/sha2")
 local util = require("util")
 local logger = require("logger")
+local socket = require("socket")
 
 local Homebranch = WidgetContainer:extend { name = "homebranch", is_doc_only = true }
 local colors = {
@@ -419,8 +420,12 @@ end
 
 function Homebranch:progressOperation()
     local point = self.ui.rolling:getLastProgress()
-    local location = self.locations.capture(self.ui.document, self.location_bounds, point)
     local dom_version = self.ui.doc_settings:readSetting("cre_dom_version")
+    local bounds = self.location_bounds
+    local location
+    if not bounds or not bounds.cache or bounds.cache.domVersion == dom_version then
+        location = self.locations.capture(self.ui.document, bounds, point)
+    end
     if location and type(dom_version) == "number" and dom_version > 0
         and dom_version <= 2147483647 and dom_version % 1 == 0 then
         location.native = { engine = "crengine", domVersion = dom_version }
@@ -441,9 +446,55 @@ function Homebranch:loadLocationMap(match)
     local map = self:request("GET", "/books/" .. match.bookId .. "/location-map?formatId=" .. match.formatId)
     assert(map.formatId == match.formatId and (not self.current_state.contentHash
         or map.contentHash == self.current_state.contentHash), "EPUB chapter map does not match this edition.")
-    local bounds, err = self.locations.prepare(self.ui.document, map, self.anchors)
+    local bounds, err = self.locations.prepare(self.ui.document, map, self.anchors, {
+        cache = self.current_state.locationCache, domVersion = self.ui.doc_settings:readSetting("cre_dom_version"),
+    })
     assert(bounds, err)
     self.location_bounds = bounds
+end
+
+function Homebranch:resolveLocations(remote, interactive)
+    local bounds = self.location_bounds
+    if not bounds then return end
+    local document, state, account, epoch = self.ui.document, self.current_state, self.settings.account, self.epoch
+    local dom_version = self.ui.doc_settings:readSetting("cre_dom_version")
+    if bounds.cache.domVersion ~= dom_version then
+        local err
+        bounds, err = self.locations.prepare(document, bounds.map, self.anchors, { domVersion = dom_version })
+        assert(bounds, err)
+        self.location_bounds = bounds
+    end
+    local function owned()
+        assert(self.epoch == epoch and self.current_state == state and self.settings.account == account
+            and self.ui.document == document and self.location_bounds == bounds
+            and self.ui.doc_settings:readSetting("cre_dom_version") == dom_version,
+            "Homebranch operation cancelled because the document or account changed.")
+    end
+    local last_yield = socket.gettime()
+    local ok, warning = self.locations.resolve(document, bounds, self.ui.rolling:getLastProgress(),
+        type(remote) == "table" and remote.revision ~= state.seenProgress and remote.location or nil, {
+            budget = interactive and 2 or 0.5,
+            checkpoint = function()
+                owned()
+                local thread = coroutine.running()
+                if thread and socket.gettime() - last_yield >= 0.025 then
+                    UIManager:scheduleIn(0.05, function()
+                        local resumed, err = coroutine.resume(thread)
+                        if not resumed then
+                            logger.warn("Homebranch chapter resolution failed")
+                            self:notice("Homebranch: " .. tostring(err))
+                        end
+                    end)
+                    coroutine.yield()
+                    owned()
+                    last_yield = socket.gettime()
+                end
+            end,
+        })
+    owned()
+    state.locationCache = bounds.cache
+    self:save()
+    if not ok then logger.warn("Homebranch: " .. warning) end
 end
 
 function Homebranch:pushProgress(state)
@@ -490,6 +541,7 @@ function Homebranch:sync(interactive)
         self:save()
     end
     local remote = self:request("GET", "/books/" .. state.bookId .. "/progress")
+    self:resolveLocations(remote, interactive)
     self:syncAnnotations()
     -- Do not overwrite an unseen remote position just because the book opened.
     if type(remote) == "table" and remote.revision ~= state.seenProgress then

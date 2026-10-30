@@ -1,5 +1,6 @@
 local root = (arg[0]:match("^(.*)/") or ".") .. "/../homebranch.koplugin/"
 local Locations = dofile(root .. "locations.lua")
+package.loaded["socket"] = { gettime = os.clock }
 local count = 0
 local function test(name, run)
     run()
@@ -39,11 +40,18 @@ local function map()
     }
 end
 local function prepare(doc, value, missing)
-    return assert(Locations.prepare(doc, value, {
+    local prepared = assert(Locations.prepare(doc, value, {
         resolve = function(_, anchor)
             if anchor.exact ~= missing then return { pos0 = anchor.exact } end
         end,
     }))
+    for _, chapter in ipairs(value.chapters) do
+        assert(Locations.resolve(doc, prepared, nil, {
+            version = 1, formatId = value.formatId, contentHash = value.contentHash,
+            mapFingerprint = value.fingerprint, href = chapter.href, chapterId = chapter.id,
+        }))
+    end
+    return prepared
 end
 
 test("chapter identity follows native boundaries across resources, not total percentage", function()
@@ -143,6 +151,143 @@ test("sections sharing a layout coordinate use their verified start instead of c
     local target = assert(Locations.target(doc, prepared, location))
     assert(target.first == "0" and target.progression == 0)
     assert(target.label:find("no measurable layout extent"))
+end)
+
+test("large maps resolve only requested boundaries and page capture never starts a search", function()
+    local doc, value, searches = document(), map(), 0
+    value.chapters = {}
+    for index = 1, 200 do
+        value.chapters[index] = {
+            id = "section-" .. index, title = "Section", kind = "chapter",
+            href = index <= 80 and "Text/one.xhtml" or "Other/one.xhtml",
+            start = (index - 1) * 5, ["end"] = index * 5, anchor = { exact = tostring((index - 1) * 5) },
+        }
+    end
+    local prepared = assert(Locations.prepare(doc, value, {
+        resolve = function(_, anchor)
+            searches = searches + 1
+            return { pos0 = anchor.exact }
+        end,
+    }))
+    assert(searches == 0 and not Locations.capture(doc, prepared, "600"))
+    local incoming = {
+        version = 1, formatId = value.formatId, contentHash = value.contentHash, mapFingerprint = value.fingerprint,
+        href = "Other/one.xhtml", chapterId = "section-190", chapterProgression = 0.5,
+        resourceProgression = 0.5, basis = "rendered",
+    }
+    assert(Locations.resolve(doc, prepared, "600", incoming))
+    assert(searches < 20)
+    local count_before_capture = searches
+    assert(Locations.capture(doc, prepared, "600").chapterId == "section-121")
+    assert(Locations.target(doc, prepared, incoming).chapter)
+    assert(not Locations.capture(doc, prepared, "10").chapterId)
+    assert(searches == count_before_capture)
+    for _, chapter in ipairs(value.chapters) do
+        incoming.href, incoming.chapterId = chapter.href, chapter.id
+        assert(Locations.resolve(doc, prepared, nil, incoming))
+    end
+    local comparisons, positions = 0, 0
+    local compare, position = doc.compareXPointers, doc.getPosFromXPointer
+    doc.compareXPointers = function(...)
+        comparisons = comparisons + 1
+        return compare(...)
+    end
+    doc.getPosFromXPointer = function(...)
+        positions = positions + 1
+        return position(...)
+    end
+    count_before_capture = searches
+    assert(Locations.capture(doc, prepared, "600").chapterId == "section-121")
+    assert(searches == count_before_capture and comparisons < 20 and positions <= 6)
+end)
+
+test("a deadline pauses inside one anchor and later syncs resume its unfinished work", function()
+    local doc, value, clock, searches = document(), map(), 0, 0
+    local prepared = assert(Locations.prepare(doc, value, {
+        resolve = function(_, anchor, options)
+            searches = searches + 1
+            for _ = 1, 150 do
+                clock = clock + 0.001
+                options.checkpoint()
+            end
+            return { pos0 = anchor.exact }
+        end,
+    }))
+    local options = { now = function() return clock end, budget = 0.05 }
+    local ok, warning = Locations.resolve(doc, prepared, "600", nil, options)
+    assert(not ok and warning:find("time limit") and searches == 1 and clock < 0.06)
+    assert(next(prepared.resources) == nil and next(prepared.cache.resources) == nil)
+    for _ = 1, 20 do
+        if Locations.resolve(doc, prepared, "600", nil, options) then break end
+    end
+    assert(Locations.capture(doc, prepared, "600").chapterId == value.chapters[2].id)
+    assert(prepared.warning == nil and searches == 4 and not prepared.pending_resolution)
+end)
+
+test("verified pointer caches survive reopening but never cross map, edition or DOM changes", function()
+    local doc, value, searches = document(), map(), 0
+    local anchors = { resolve = function(_, anchor)
+        searches = searches + 1
+        return { pos0 = anchor.exact }
+    end }
+    local prepared = assert(Locations.prepare(doc, value, anchors, { domVersion = 20240114 }))
+    assert(Locations.resolve(doc, prepared, "600"))
+    local cache, previous = prepared.cache, searches
+    local reopened = assert(Locations.prepare(doc, value, anchors, { cache = cache, domVersion = 20240114 }))
+    assert(Locations.resolve(doc, reopened, "600"))
+    assert(searches == previous and Locations.capture(doc, reopened, "600").chapterId == value.chapters[2].id)
+    doc.getPosFromXPointer = function(_, point) return tonumber(point) * 2 end
+    doc.info.doc_height = 2000
+    local captured = Locations.capture(doc, reopened, "600")
+    assert(Locations.target(doc, reopened, captured).start_pos == 400)
+    for _, field in ipairs({ "fingerprint", "contentHash", "formatId", "domVersion" }) do
+        local changed = map()
+        if field ~= "domVersion" then changed[field] = "changed" end
+        local other = assert(Locations.prepare(doc, changed, anchors,
+            { cache = cache, domVersion = field == "domVersion" and 20200101 or 20240114 }))
+        previous = searches
+        assert(Locations.resolve(doc, other, "600"))
+        assert(searches > previous and other.cache ~= cache)
+    end
+    cache.resources["Text/one.xhtml"] = "invalid-pointer"
+    local invalid = assert(Locations.prepare(doc, value, anchors, { cache = cache, domVersion = 20240114 }))
+    previous = searches
+    assert(Locations.resolve(doc, invalid, "600"))
+    assert(searches > previous and invalid.cache.resources["Text/one.xhtml"] == "0")
+end)
+
+test("cancellation is propagated rather than disguised as an approximate success", function()
+    local doc, value, cancelled = document(), map(), {}
+    local prepared = assert(Locations.prepare(doc, value, { resolve = function() error("Unexpected search") end }))
+    local ok, err = pcall(Locations.resolve, doc, prepared, "600", nil, {
+        checkpoint = function() error(cancelled, 0) end,
+    })
+    assert(not ok and err == cancelled and next(prepared.cache.resources) == nil)
+end)
+
+test("resuming an older scan also resolves the newly requested reading point", function()
+    local doc, value, clock = document(), map(), 0
+    local prepared = assert(Locations.prepare(doc, value, {
+        resolve = function(_, anchor, options)
+            for _ = 1, 10 do clock = clock + 0.001; options.checkpoint() end
+            return { pos0 = anchor.exact }
+        end,
+    }))
+    assert(not Locations.resolve(doc, prepared, "100", nil, { now = function() return clock end, budget = 0.015 }))
+    assert(prepared.pending_resolution and prepared.pending_resolution.point == "100")
+    assert(Locations.resolve(doc, prepared, "850", nil, { now = function() return clock end, budget = 1 }))
+    assert(Locations.capture(doc, prepared, "850").chapterId == value.chapters[3].id)
+    assert(not prepared.pending_resolution)
+end)
+
+test("publications exceeding duplicate-check capacity fall back before an expensive native scan", function()
+    local doc, value = document(), map()
+    value.resources[2]["end"], value.chapters[3]["end"] = 5 * 1024 * 1024, 5 * 1024 * 1024
+    local prepared = assert(Locations.prepare(doc, value, {
+        resolve = function() error("Oversized publications must not start native passage searches.") end,
+    }))
+    assert(Locations.resolve(doc, prepared, "600"))
+    assert(prepared.warning:find("duplicate%-check limit") and not Locations.capture(doc, prepared, "600"))
 end)
 
 print("Passed " .. count .. " portable location tests.")
