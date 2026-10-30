@@ -66,6 +66,10 @@ local prefix = "/books/" .. match.bookId
 local map = request("GET", prefix .. "/location-map?formatId=" .. match.formatId)
 assert(map.contentHash == hash)
 local prepared = assert(Locations.prepare(document, map, Anchors))
+assert(Locations.resolve(document, prepared, nil, {
+    version = 1, formatId = map.formatId, contentHash = hash, mapFingerprint = map.fingerprint,
+    href = "OPS/one.xhtml", chapterId = "OPS/one.xhtml#long",
+}, { budget = 2 }))
 local chosen
 for index, item in ipairs(map.chapters) do
     if item.id == "OPS/one.xhtml#long" then chosen = prepared.chapters[index] end
@@ -88,6 +92,7 @@ local target = {
 signal("chapter-native-progress", { location = location, target = target })
 local remote = request("GET", prefix .. "/progress")
 assert(remote.source == "web" and remote.location.chapterId == target.chapterId)
+assert(Locations.resolve(document, prepared, nil, remote.location, { budget = 2 }))
 local jump = assert(Locations.target(document, prepared, remote.location))
 assert(jump.chapter and jump.pos >= jump.start_pos and jump.pos < jump.end_pos)
 native:gotoXPointer(jump.point)

@@ -68,6 +68,66 @@ test("a missed split-token occurrence cannot be guessed as unique", function()
     doc.getTextFromXPointer = function() return "Exact quote and another Exact quote" end
     equal(Anchors.resolve(doc, { version = 1, exact = "Exact quote" }), nil)
 end)
+test("batched chapter matching refines an overshoot and preserves ambiguity checks", function()
+    local text = "Chapter " .. ("original words "):rep(12) .. "end. Next section."
+    local exact = text:sub(1, #text - #" Next section.")
+    local calls = 0
+    local doc = {
+        isXPointerInDocument = function(_, point) return tonumber(point) ~= nil end,
+        findAllText = function(_, query)
+            local _, ending = assert(text:find(query, 1, true))
+            return { { start = "1", ["end"] = tostring(ending + 1) } }
+        end,
+        getTextFromXPointers = function(_, first, last)
+            calls = calls + 1
+            return text:sub(tonumber(first), tonumber(last) - 1)
+        end,
+        getNextVisibleChar = function(_, point)
+            local next_point = tonumber(point) + 1
+            return next_point <= #text + 1 and tostring(next_point) or nil
+        end,
+        getTextFromXPointer = function() return text end,
+        getSelectedWordContext = function() return "", "" end,
+    }
+    local anchor = { version = 1, exact = exact }
+    local result = assert(Anchors.resolve(doc, anchor, { batch = true }))
+    equal(result.pos0, "1")
+    equal(Anchors.normalize(doc:getTextFromXPointers(result.pos0, result.pos1)), Anchors.normalize(exact))
+    assert(calls < 30, "Chapter matching must not extract HTML for each character.")
+    doc.getTextFromXPointer = function() return text .. " " .. exact end
+    assert(not Anchors.resolve(doc, anchor, { batch = true }), "Missed inline-token matches must remain ambiguous.")
+end)
+test("chapter matching checks cancellation inside candidate extension", function()
+    local checks, cancelled = 0, {}
+    local doc = document({ { start = "a", ["end"] = "b" } })
+    local ok, err = pcall(Anchors.resolve, doc, { version = 1, exact = "Exact quote" }, {
+        batch = true,
+        checkpoint = function()
+            checks = checks + 1
+            if checks == 4 then error(cancelled, 0) end
+        end,
+    })
+    assert(not ok and err == cancelled and checks == 4)
+end)
+test("chapter prefix searches retry first-token matching when inline markup hides occurrences", function()
+    local first, second = { start = "a", ["end"] = "b" }, { start = "c", ["end"] = "b" }
+    local doc, queries = document({ first, second }), {}
+    doc.getTextFromXPointers = function() return "Exact quote" end
+    doc.findAllText = function(_, query)
+        queries[#queries + 1] = query
+        return query == "Exact quote" and { first } or { first, second }
+    end
+    doc.getSelectedWordContext = function(_, _, _, start)
+        return start == "c" and "Chosen" or "Other", ""
+    end
+    local result = assert(Anchors.resolve(doc, { version = 1, exact = "Exact quote", prefix = "Chosen" }, { batch = true }))
+    equal(result.pos0, "c")
+    equal(queries[1], "Exact quote")
+    equal(queries[2], "Exact")
+    doc = document({ first })
+    doc.findAllText = function(_, query) return query == "Exact quote" and {} or { first } end
+    assert(Anchors.resolve(doc, { version = 1, exact = "Exact quote" }, { batch = true }))
+end)
 test("queue mutations keep stable IDs through retry and acknowledgements", function()
     local state = State.document({}, "digest")
     State.queue(state, "annotation", payload({ text = "Exact quote" }), id)
